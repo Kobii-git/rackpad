@@ -158,15 +158,43 @@ jobs:
         env:
           CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
           PLATFORM: ${{ matrix.platform }}
+          # v1.9.0-beta.7, revision 3a1f96c8b4ae9e9c8bd1b6eaad4574af26b1c870.
+          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:14982247fe0a5c65c32233003e670432ca6dbff131a5fa69e8810d33ee2375a5
+          PRECEDING_RELEASE_SCHEMA: "62"
           # Immutable v1.8.3/schema-51 and beta/schema-53 baselines.
           STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:6a4fce729eef6bf380cfcc5a9e2be3daad914686ff04c2f9b85904528a6cf94e
+          # v1.8.7-beta.0, revision 7bf2eaf484daa5c878154a5d1f828528daff7bff.
+          SCHEMA57_IMAGE: ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5
+          # Stable v1.8.7, revision 956819c8ac92c47c1d3bab7a14471d910defc114.
+          PREVIOUS_STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:c772ace14b832e0b855f92ede16bb79340d3a4edc6a3027c8ec6acb233cc6bec
           BETA_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
-          # Immediately preceding stable v1.8.6/schema-55 image.
-          PREVIOUS_STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:b8a6f3b3c90b70ed10893e1c2347c974db2c21d3d73ea80e603d616f0e4fff91
         run: |
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$STABLE_IMAGE" --previous-schema 51 --platform "$PLATFORM" --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$BETA_IMAGE" --previous-schema 53 --platform "$PLATFORM" --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$PREVIOUS_STABLE_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$SCHEMA57_IMAGE" --previous-schema 57 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$PRECEDING_RELEASE_IMAGE" --previous-schema "$PRECEDING_RELEASE_SCHEMA" --platform "$PLATFORM" --revision "$GITHUB_SHA"
+
+      - name: Real SMTP and ntfy acceptance
+        if: matrix.platform == 'linux/amd64'
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/check-notification-containers.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM"
+
+      - name: Real Kuma and available Glances acceptance
+        if: matrix.platform == 'linux/amd64'
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/check-host-provider-containers.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM"
+
+      - name: Real Home Assistant collector acceptance
+        if: matrix.platform == 'linux/amd64'
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/check-home-assistant-container.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
   smoke:
     needs: build
@@ -212,23 +240,26 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
-          # Immediately preceding stable v1.8.6/schema-55 image.
-          PREVIOUS_STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:b8a6f3b3c90b70ed10893e1c2347c974db2c21d3d73ea80e603d616f0e4fff91
-          # Retain the older schema-53 upgrade and rollback fixture as well.
+          # v1.9.0-beta.7, revision 3a1f96c8b4ae9e9c8bd1b6eaad4574af26b1c870.
+          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:14982247fe0a5c65c32233003e670432ca6dbff131a5fa69e8810d33ee2375a5
+          PRECEDING_RELEASE_SCHEMA: "62"
+          # Immutable schema-53 beta baseline; never resolve a moving tag here.
+          # v1.8.7-beta.0, revision 7bf2eaf484daa5c878154a5d1f828528daff7bff.
+          SCHEMA57_IMAGE: ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5
+          # Stable v1.8.7, revision 956819c8ac92c47c1d3bab7a14471d910defc114.
+          PREVIOUS_STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:c772ace14b832e0b855f92ede16bb79340d3a4edc6a3027c8ec6acb233cc6bec
           PREVIOUS_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
         run: |
           image_name="${IMAGE_NAME,,}"
           node scripts/check-release-image.mjs \
             --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" \
             --previous-image "$PREVIOUS_IMAGE" \
+            --previous-schema 53 \
             --platform "$PLATFORM" \
             --revision "$GITHUB_SHA"
-          node scripts/check-release-image.mjs \
-            --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" \
-            --previous-image "$PREVIOUS_STABLE_IMAGE" \
-            --previous-schema 55 \
-            --platform "$PLATFORM" \
-            --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" --previous-image "$PREVIOUS_STABLE_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" --previous-image "$SCHEMA57_IMAGE" --previous-schema 57 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" --previous-image "$PRECEDING_RELEASE_IMAGE" --previous-schema "$PRECEDING_RELEASE_SCHEMA" --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
   release:
     needs: [build, smoke]

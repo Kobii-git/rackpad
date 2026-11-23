@@ -116,6 +116,7 @@ export function isBlockedNetworkAddress(address: string) {
 export async function requestPinnedUrl(
   input: URL,
   options: {
+    deadlineMs?: number;
     timeoutMs?: number;
     maxRedirects?: number;
     headers?: Record<string, string>;
@@ -133,6 +134,7 @@ export async function requestPinnedUrl(
 export async function requestPinnedUrlWithBody(
   input: URL,
   options: {
+    deadlineMs?: number;
     timeoutMs?: number;
     maxRedirects?: number;
     maxResponseBytes?: number;
@@ -158,6 +160,7 @@ export async function requestPinnedUrlWithBody(
 async function requestPinnedUrlResponse(
   input: URL,
   options: {
+    deadlineMs?: number;
     timeoutMs?: number;
     maxRedirects?: number;
     maxResponseBytes?: number;
@@ -184,12 +187,16 @@ async function requestPinnedUrlResponse(
     throw new ValidationError("Target URL must not contain credentials.");
   }
 
+  const remaining = () => options.deadlineMs === undefined ? timeoutMs : Math.min(timeoutMs,options.deadlineMs-Date.now());
+  if(remaining() <= 0) throw new ValidationError("Request timed out.",502);
   const resolved = await resolveRoutableHost(
     input,
     options.reservedHostMessage,
+    options.deadlineMs === undefined ? 5000 : Math.min(5000,remaining()),
   );
+  if(remaining() <= 0) throw new ValidationError("Request timed out.",502);
   const status = await pinnedRequestTransport(input, resolved, {
-    timeoutMs,
+    timeoutMs:remaining(),
     headers: options.headers ?? {},
     method: options.method ?? "GET",
     body: options.body,
@@ -296,6 +303,10 @@ function performPinnedRequest(
       input.protocol === "https:"
         ? https.request(requestOptions)
         : http.request(requestOptions);
+    // An inactivity timeout alone allows an endlessly streaming peer to hold
+    // a notification or monitor open. Bound the complete transport lifetime.
+    const deadline = setTimeout(() => request.destroy(new Error("Request timed out.")), options.timeoutMs);
+    request.once("close", () => clearTimeout(deadline));
     request.setTimeout(options.timeoutMs, () => {
       request.destroy(new Error("Request timed out."));
     });
@@ -304,6 +315,8 @@ function performPinnedRequest(
       const statusCode = response.statusCode ?? 0;
       const location = response.headers.location;
       if (!options.captureBody) {
+        response.once("error", reject);
+        response.once("aborted", () => reject(new Error("Response was aborted.")));
         response.resume();
         response.on("end", () =>
           resolve({ statusCode, location, headers: response.headers }),

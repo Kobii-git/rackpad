@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { headerColorStyle } from "@/lib/presentation";
+import { DeviceSummary } from "@/components/rack/DeviceSummary";
 import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { Link } from "react-router-dom";
 import {
@@ -198,6 +199,16 @@ export function RackCablingCanvas({
   const [hoveredLooseDeviceId, setHoveredLooseDeviceId] = useState<
     string | null
   >(null);
+  const [dismissedLooseDeviceId, setDismissedLooseDeviceId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = hoveredLooseDeviceId ?? (selection?.kind === "device" ? selection.id : null);
+    if (!id) return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDismissedLooseDeviceId(id);
+    };
+    window.addEventListener("keydown", dismiss);
+    return () => window.removeEventListener("keydown", dismiss);
+  }, [hoveredLooseDeviceId, selection]);
   const [hoveredCableId, setHoveredCableId] = useState<string | null>(null);
   const [searchIndex, setSearchIndex] = useState(0);
   const looseExpandedRoomKey = [...looseExpandedRoomIds].sort().join("\u0000");
@@ -1448,9 +1459,10 @@ export function RackCablingCanvas({
                       )
                       .join("\n");
                     const detailsVisible =
-                      hoveredLooseDeviceId === summary.device.id ||
-                      (selection?.kind === "device" &&
-                        selection.id === summary.device.id);
+                      dismissedLooseDeviceId !== summary.device.id &&
+                      (hoveredLooseDeviceId === summary.device.id ||
+                        (selection?.kind === "device" &&
+                          selection.id === summary.device.id));
                     const detailsId = `loose-details-${summary.device.id}`;
                     return (
                       <div
@@ -1463,13 +1475,15 @@ export function RackCablingCanvas({
                           width: summary.width - 8,
                           height: summary.height - 8,
                         }}
-                        onMouseEnter={() =>
-                          setHoveredLooseDeviceId(summary.device.id)
-                        }
+                        onMouseEnter={() => {
+                          setDismissedLooseDeviceId(null);
+                          setHoveredLooseDeviceId(summary.device.id);
+                        }}
                         onMouseLeave={() => setHoveredLooseDeviceId(null)}
-                        onFocus={() =>
-                          setHoveredLooseDeviceId(summary.device.id)
-                        }
+                        onFocus={() => {
+                          setDismissedLooseDeviceId(null);
+                          setHoveredLooseDeviceId(summary.device.id);
+                        }}
                         onBlur={(event) => {
                           if (
                             !event.currentTarget.contains(event.relatedTarget)
@@ -1492,12 +1506,14 @@ export function RackCablingCanvas({
                           })}
                           onClick={(event) => {
                             event.stopPropagation();
+                            setDismissedLooseDeviceId(null);
                             selectDevice(summary.device.id);
                           }}
                         >
                           <DeviceName
                             position={summary.device.labelPosition}
                             name={summary.device.hostname}
+                            tooltip={false}
                             // Leave the scaled cable-count row clear below the name.
                             maxHeight={summary.height - 8 - 24}
                             selected={selection?.kind === "device" && selection.id === summary.device.id}
@@ -1518,7 +1534,8 @@ export function RackCablingCanvas({
                               left: Math.min(0, scene.width - summary.x - 416),
                             }}
                           >
-                            {details || summary.device.hostname}
+                            <DeviceSummary device={summary.device} />
+                            {details && <div className="mt-2">{details}</div>}
                           </div>
                         )}
                       </div>
@@ -1576,6 +1593,7 @@ export function RackCablingCanvas({
                         <DeviceName
                           position={card.device.labelPosition}
                           name={card.device.hostname}
+                          summary={card.device}
                           selected={highlightedDeviceIds.has(card.device.id)}
                         />
                         {card.layout ? (

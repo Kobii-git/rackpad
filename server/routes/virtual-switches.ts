@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import {
@@ -191,11 +192,11 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
     return parseVirtualSwitch(getVirtualSwitchRow(req.params.id)!)
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "VirtualSwitch", entityId: req.params.id, action: "virtual.switch.delete" }, () => {
     const existing = getVirtualSwitchLabRow(req.params.id)
     if (!assertLabWriteFromRow(req, reply, existing)) return
 
     db.prepare('DELETE FROM virtualSwitches WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

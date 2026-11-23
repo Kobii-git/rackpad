@@ -1,3 +1,15 @@
+import { parseIntegrationOptions } from "../lib/integrations/options.js";
+import { validateExternalHealthRows } from "../lib/integrations/external-health-validation.js";
+import { requireFreshExternalReadings } from "../lib/integrations/external-health.js";
+import { INTEGRATION_PROVIDERS, INTEGRATION_PROVIDER_INFO, type IntegrationProvider } from "../lib/integrations/types.js";
+import { validateFloorplanRows } from "../lib/floorplans.js";
+import { validatePublicReferenceRows } from "../lib/public-references.js";
+import { backfillAuditScopes, parseAuditLabIds } from "../lib/audit-scope.js";
+import { parsePendingAlertState } from '../lib/notification-state.js';
+import { invalidateMonitorObservations } from '../lib/monitoring.js';
+import { NotificationDeliveryError } from '../lib/notification-delivery.js';
+import { SmtpDeliveryError } from '../lib/smtp-error.js';
+import { parseServiceEndpoint } from '../lib/service-endpoint.js';
 import { parseStackMemberLayout } from "../lib/stack-member-layout-data.js";
 import { validateStackIntegrity } from "../lib/stack-integrity.js";
 import { restoredMonitorCommunity } from "../lib/security-migration.js";
@@ -19,6 +31,7 @@ import {
   loadAlertSettings,
   saveAlertSettings,
   sendTestAlert,
+  invalidateNotificationAttempts,
 } from "../lib/alerts.js";
 import { createId } from "../lib/ids.js";
 import {
@@ -107,6 +120,8 @@ const REDACTED_ALERT_SETTING_FIELDS = [
   "discordWebhookUrl",
   "telegramBotToken",
   "smtpPassword",
+  "ntfyTokenEnc",
+  "ntfyToken",
 ] as const;
 
 function readAppVersion() {
@@ -124,7 +139,7 @@ function createBackupFilename(exportedAt: string) {
   return `rackpad-backup-${exportedAt.replace(/[:.]/g, "-").replace("T", "_").replace("Z", "")}.json`;
 }
 
-function sanitizeBackupAppSettings(rows: Record<string, unknown>[]) {
+function sanitizeBackupAppSettings(rows: Record<string, unknown>[], restoring = false) {
   return rows.map((row) => {
     if (row.key !== "alertSettings" || typeof row.value !== "string") {
       return row;
@@ -132,8 +147,8 @@ function sanitizeBackupAppSettings(rows: Record<string, unknown>[]) {
 
     try {
       const parsed = JSON.parse(row.value) as Record<string, unknown>;
-      const next = { ...DEFAULT_ALERT_SETTINGS, ...parsed };
-      for (const key of REDACTED_ALERT_SETTING_FIELDS) {
+      const next: Record<string, unknown> = { ...DEFAULT_ALERT_SETTINGS, ...parsed, ntfyTokenConfigured: false };
+      for (const key of restoring ? ["ntfyTokenEnc", "ntfyToken"] : REDACTED_ALERT_SETTING_FIELDS) {
         next[key] = null;
       }
       return {
@@ -141,7 +156,7 @@ function sanitizeBackupAppSettings(rows: Record<string, unknown>[]) {
         value: JSON.stringify(next),
       };
     } catch {
-      return row;
+      throw new ValidationError("Invalid notification settings in backup.");
     }
   });
 }
@@ -293,6 +308,11 @@ const exportBackupSnapshot = db.transaction(
             "SELECT * FROM referenceImages ORDER BY entityType, entityId, face, createdAt DESC, id",
           )
           .all(),
+        integrationRecordBindings: db.prepare("SELECT * FROM integrationRecordBindings ORDER BY id").all(),
+        integrationLatestReadings: db.prepare("SELECT * FROM integrationLatestReadings ORDER BY connectionId,providerRecordId,readingKey").all(),
+        externalMonitorMappings: db.prepare("SELECT * FROM externalMonitorMappings ORDER BY monitorId").all(),
+        roomFloorplans: db.prepare("SELECT * FROM roomFloorplans ORDER BY roomId").all(),
+        roomFloorplanMarkers: db.prepare("SELECT * FROM roomFloorplanMarkers ORDER BY id").all(),
         auditLog: db
           .prepare("SELECT * FROM auditLog ORDER BY ts DESC, id DESC")
           .all(),
@@ -1159,13 +1179,7 @@ function validateBackupIntegrations(input: {
 }) {
   const labIds = new Set(input.labs.map((row) => String(row.id)));
   const connectionIds = new Set<string>();
-  const providers = new Set([
-    "proxmox",
-    "unifi",
-    "omada",
-    "opnsense",
-    "dockhand",
-  ]);
+  const providers = new Set<string>(INTEGRATION_PROVIDERS);
   for (const row of input.connections) {
     const id = String(row.id ?? "");
     if (!id || connectionIds.has(id)) {
@@ -1209,6 +1223,8 @@ function validateBackupIntegrations(input: {
         "BACKUP_INTEGRITY_INVALID",
       );
     }
+    const connection = input.connections.find(connection => connection.id === row.connectionId)!;
+    if (INTEGRATION_PROVIDER_INFO[connection.provider as IntegrationProvider].capabilities.health) throw new ValidationError("Health providers require explicit inventory adoption and do not support automatic adoption schedules.", 422);
     if (!["merge", "skip", "mirror", "overwrite"].includes(String(row.mode))) {
       throw new ValidationError(
         `Backup integration schedule ${id} has an invalid mode.`,
@@ -1242,6 +1258,11 @@ const restoreBackupSnapshot = db.transaction(
 
     const legacySecurity = Number(snapshot.schemaVersion ?? 0) < 50;
     const data = asObject(snapshot.data);
+    const integrationRecordBindings = normalizeArrayRecordArray(data.integrationRecordBindings ?? [], "data.integrationRecordBindings");
+    const integrationLatestReadings = normalizeArrayRecordArray(data.integrationLatestReadings ?? [], "data.integrationLatestReadings");
+    const externalMonitorMappings = normalizeArrayRecordArray(data.externalMonitorMappings ?? [], "data.externalMonitorMappings");
+    const roomFloorplans = normalizeArrayRecordArray(data.roomFloorplans ?? [], "data.roomFloorplans");
+    const roomFloorplanMarkers = normalizeArrayRecordArray(data.roomFloorplanMarkers ?? [], "data.roomFloorplanMarkers");
     const labs = normalizeArrayRecordArray(data.labs, "data.labs");
     const rooms = normalizeArrayRecordArray(data.rooms ?? [], "data.rooms");
     const racks = normalizeArrayRecordArray(data.racks, "data.racks");
@@ -1347,7 +1368,10 @@ const restoreBackupSnapshot = db.transaction(
       data.referenceImages ?? [],
       "data.referenceImages",
     );
-    const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog");
+    const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog").map((row): Record<string, unknown> & { labIds: string[] | null } => {
+      try { return { ...row, labIds: parseAuditLabIds(row.labIds) }; }
+      catch { throw new ValidationError("Invalid audit lab scope in backup."); }
+    });
     const users = normalizeArrayRecordArray(data.users, "data.users");
     const userLabAccess = normalizeArrayRecordArray(
       data.userLabAccess ?? [],
@@ -1360,7 +1384,7 @@ const restoreBackupSnapshot = db.transaction(
     const deviceMonitors = normalizeArrayRecordArray(
       data.deviceMonitors,
       "data.deviceMonitors",
-    );
+    ).map(row => Object.assign({}, row, parsePendingAlertState(row)));
     const dockerImportSources = normalizeArrayRecordArray(
       data.dockerImportSources ?? [],
       "data.dockerImportSources",
@@ -1384,7 +1408,7 @@ const restoreBackupSnapshot = db.transaction(
     const deviceServices = normalizeArrayRecordArray(
       data.deviceServices ?? [],
       "data.deviceServices",
-    );
+    ).map(row => Object.assign({}, row, parseServiceEndpoint(row)));
     const wifiControllers = normalizeArrayRecordArray(
       data.wifiControllers ?? [],
       "data.wifiControllers",
@@ -1409,10 +1433,10 @@ const restoreBackupSnapshot = db.transaction(
       data.wifiClientAssociations ?? [],
       "data.wifiClientAssociations",
     );
-    const appSettings = normalizeArrayRecordArray(
+    const appSettings = sanitizeBackupAppSettings(normalizeArrayRecordArray(
       data.appSettings ?? [],
       "data.appSettings",
-    );
+    ), true);
 
     if (users.length === 0) {
       throw new ValidationError(
@@ -1586,6 +1610,10 @@ const restoreBackupSnapshot = db.transaction(
       }
       restoredDefaultDeviceTypes.add(deviceType);
     }
+    validateExternalHealthRows({ connections: integrationConnections, devices, monitors: deviceMonitors, bindings: integrationRecordBindings, readings: integrationLatestReadings, mappings: externalMonitorMappings });
+    validateFloorplanRows({ rooms, racks, devices, referenceImages, roomFloorplans, roomFloorplanMarkers });
+    validatePublicReferenceRows(devices, "device");
+    validatePublicReferenceRows(portLinks, "cable");
     const backupDeviceIds = new Set(devices.map((row) => String(row.id ?? "")));
     const backupPortsByDevice = new Map<string, Set<string>>();
     for (const port of ports) {
@@ -1648,6 +1676,9 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM wifiSsids;
     DELETE FROM wifiControllers;
     DELETE FROM deviceServices;
+    DELETE FROM externalMonitorMappings;
+    DELETE FROM integrationRecordBindings;
+    DELETE FROM integrationLatestReadings;
     DELETE FROM deviceMonitors;
     DELETE FROM dockerContainerLinks;
     DELETE FROM dockerImportSources;
@@ -1656,6 +1687,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM snmpCredentials;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
+    DELETE FROM roomFloorplans;
+    DELETE FROM roomFloorplanMarkers;
     DELETE FROM referenceImages;
     DELETE FROM deviceImages;
     DELETE FROM documentationDeviceLinks;
@@ -1704,8 +1737,8 @@ const restoreBackupSnapshot = db.transaction(
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide, labelPosition)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide, labelPosition, publicReference)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -1727,8 +1760,8 @@ const restoreBackupSnapshot = db.transaction(
   `);
     const insertPortLink = db.prepare(
       `INSERT INTO portLinks
-        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides, publicReference)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
@@ -1852,7 +1885,7 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertAudit = db.prepare(
-      "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary, labIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     );
     const insertUser = db.prepare(`
     INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
@@ -1890,9 +1923,12 @@ const restoreBackupSnapshot = db.transaction(
       lastCheckAt,
       lastAlertAt,
       lastResult,
-      lastMessage
+      lastMessage,
+      pendingAlertKind,
+      pendingAlertAt,
+      lastAlertAttemptAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertSnmpCredential = db.prepare(`
     INSERT INTO snmpCredentials (
@@ -1923,8 +1959,8 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDeviceService = db.prepare(`
-    INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, networkPort, transportProtocol, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertWifiController = db.prepare(`
     INSERT INTO wifiControllers (id, labId, deviceId, name, vendor, model, managementIp, notes)
@@ -2033,6 +2069,8 @@ const restoreBackupSnapshot = db.transaction(
           row.syncGuests == null ? 1 : Number(Boolean(row.syncGuests)),
       });
     }
+    for (const row of integrationConnections) db.prepare("UPDATE integrationConnections SET healthPollingEnabled=?,healthIntervalSeconds=?,healthLastCheckedAt=?,healthLastError=? WHERE id=?").run(Number(Boolean(row.healthPollingEnabled ?? 0)),row.healthIntervalSeconds ?? 60,row.healthLastCheckedAt ?? null,row.healthLastError ?? null,row.id);
+    for (const row of integrationConnections) db.prepare("UPDATE integrationConnections SET options=? WHERE id=?").run(JSON.stringify(parseIntegrationOptions(row.options,String(row.provider))),row.id);
     for (const row of integrationSyncSchedules) {
       insertIntegrationSyncSchedule.run({
         id: row.id,
@@ -2289,6 +2327,7 @@ const restoreBackupSnapshot = db.transaction(
         row.shelfOrientation ?? 0,
         row.rackSide ?? null,
         optionalLabelPosition(row) ?? "upper-right",
+        row.publicReference ?? null,
       );
     }
     for (const row of stackMembers) {
@@ -2517,6 +2556,7 @@ const restoreBackupSnapshot = db.transaction(
         JSON.stringify(routeWaypoints),
         parseCableRouteMode(row.routeMode, routeWaypoints),
         JSON.stringify(parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"))),
+        row.publicReference ?? null,
       );
     }
     for (const row of portTemplates) {
@@ -2783,6 +2823,10 @@ const restoreBackupSnapshot = db.transaction(
         row.updatedAt ?? row.createdAt ?? now,
       );
     }
+    for (const row of roomFloorplans) db.prepare("INSERT INTO roomFloorplans(roomId,backgroundImageId,revision,updatedAt) VALUES(?,?,?,?)").run(row.roomId,row.backgroundImageId ?? null,0,row.updatedAt);
+    for (const row of roomFloorplanMarkers) db.prepare("INSERT INTO roomFloorplanMarkers(id,roomId,deviceId,rackId,x,y,label,updatedAt) VALUES(?,?,?,?,?,?,?,?)").run(row.id,row.roomId,row.deviceId ?? null,row.rackId ?? null,row.x,row.y,row.label ?? null,row.updatedAt);
+    // Marker insertion advances revisions; a restore retains the snapshot revision.
+    for (const row of roomFloorplans) db.prepare("UPDATE roomFloorplans SET revision=?,updatedAt=? WHERE roomId=?").run(row.revision,row.updatedAt,row.roomId);
     for (const row of deviceImages) {
       const now = new Date().toISOString();
       insertDeviceImage.run(
@@ -2806,6 +2850,7 @@ const restoreBackupSnapshot = db.transaction(
         row.entityType,
         row.entityId,
         row.summary,
+        row.labIds === null ? null : JSON.stringify(row.labIds),
       );
     }
     for (const row of deviceMonitors) {
@@ -2833,6 +2878,9 @@ const restoreBackupSnapshot = db.transaction(
         row.lastAlertAt ?? null,
         row.lastResult ?? null,
         row.lastMessage ?? null,
+        row.pendingAlertKind,
+        row.pendingAlertAt,
+        row.lastAlertAttemptAt,
       );
     }
     for (const row of deviceServices) {
@@ -2848,6 +2896,8 @@ const restoreBackupSnapshot = db.transaction(
         row.monitorId ?? null,
         row.url ?? null,
         row.notes ?? null,
+        row.networkPort,
+        row.transportProtocol,
         row.createdAt ?? now,
         row.updatedAt ?? row.createdAt ?? now,
       );
@@ -2952,6 +3002,9 @@ const restoreBackupSnapshot = db.transaction(
       const layout = parseStackMemberLayout(row);
       db.prepare("INSERT INTO deviceStackMemberLayouts (memberId,sourceTemplateId,status,snapshot,bindings,portFingerprint,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)").run(layout.memberId,layout.sourceTemplateId,layout.status,JSON.stringify(layout.snapshot),JSON.stringify(layout.bindings),layout.portFingerprint,layout.createdAt,layout.updatedAt);
     }
+    for (const row of integrationRecordBindings) db.prepare("INSERT INTO integrationRecordBindings(id,connectionId,providerRecordId,deviceId,sourceIdentity,updatedAt) VALUES(?,?,?,?,?,?)").run(row.id,row.connectionId,row.providerRecordId,row.deviceId,row.sourceIdentity,row.updatedAt);
+    for (const row of integrationLatestReadings) db.prepare("INSERT INTO integrationLatestReadings(connectionId,providerRecordId,recordName,readingKey,label,value,unit,health,observedAt,collectedAt,collectionError) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(row.connectionId,row.providerRecordId,row.recordName,row.readingKey,row.label,typeof row.value === "string" ? row.value : JSON.stringify(row.value),row.unit ?? null,row.health,row.observedAt,row.collectedAt,row.collectionError ?? null);
+    for (const row of externalMonitorMappings) db.prepare("INSERT INTO externalMonitorMappings(monitorId,bindingId,readingKey,alertOnDegraded) VALUES(?,?,?,?)").run(row.monitorId,row.bindingId ?? null,row.readingKey,Number(Boolean(row.alertOnDegraded)));
     validateStackIntegrity(db);
     const restoredAt = new Date().toISOString();
     const restoreAuditId = createId("a");
@@ -2963,8 +3016,10 @@ const restoreBackupSnapshot = db.transaction(
       "Backup",
       restoreAuditId,
       `Restored Rackpad backup exported at ${String(snapshot.exportedAt ?? "unknown time")}`,
+      null,
     );
 
+    if (Number(snapshot.schemaVersion ?? 0) < 58) backfillAuditScopes(db);
     setBootstrapState(users.length === 0);
 
     return {
@@ -2983,6 +3038,8 @@ const restoreBackupSnapshot = db.transaction(
         documentationDeviceLinks: documentationDeviceLinks.length,
         deviceImages: deviceImages.length,
         referenceImages: referenceImages.length,
+        roomFloorplans: roomFloorplans.length,
+        roomFloorplanMarkers: roomFloorplanMarkers.length,
         deviceServices: deviceServices.length,
         portTemplates: portTemplates.length,
         hardwareTemplates: hardwareTemplates.length,
@@ -3190,6 +3247,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     if (!requireAdmin(req, reply)) return;
     const body = asObject(req.body);
     const saved = saveAlertSettings({
+      ntfyTopicUrl: optionalString(body, "ntfyTopicUrl", { maxLength: 1000 }),
+      ntfyToken: optionalString(body, "ntfyToken", { maxLength: 1024, allowEmpty: true }),
       enabled: optionalBoolean(body, "enabled") ?? false,
       notifyOnDown: optionalBoolean(body, "notifyOnDown") ?? true,
       notifyOnRecovery: optionalBoolean(body, "notifyOnRecovery") ?? true,
@@ -3238,7 +3297,16 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/alert-settings/test", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
-    return sendTestAlert(req.authUser.username);
+    try {
+      return await sendTestAlert(req.authUser.username);
+    } catch (error) {
+      if (error instanceof SmtpDeliveryError || error instanceof NotificationDeliveryError) {
+        return reply.status(500).send({ error: error.message,
+          code: error instanceof SmtpDeliveryError ? `smtp_${error.category}` : error.code,
+          channels: 'channels' in error ? error.channels : undefined });
+      }
+      throw error;
+    }
   });
 
   app.get("/export", async (req, reply) => {
@@ -3262,6 +3330,10 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/restore", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     const snapshot = asObject(req.body);
-    return reply.send(restoreBackupSnapshot(snapshot, req.authUser.username));
+    const restored = restoreBackupSnapshot(snapshot, req.authUser.username);
+    invalidateNotificationAttempts();
+    invalidateMonitorObservations();
+    requireFreshExternalReadings();
+    return reply.send(restored);
   });
 };

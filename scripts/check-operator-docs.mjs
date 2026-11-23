@@ -57,6 +57,16 @@ export function inspectOperatorDocs(repository = root) {
   }
   const version = JSON.parse(readFileSync(path.join(repository, "package.json"), "utf8")).version;
   const candidate = readFileSync(path.join(repository, "README.md"), "utf8").match(/This branch prepares \*\*v([^*]+)\*\*/)?.[1];
+  if (candidate) {
+    const note = path.join(repository, `docs/releases/v${version}.md`);
+    const source = path.join(repository, 'server/schema-version.ts');
+    if (!existsSync(note) || !existsSync(source)) failures.push('Current candidate is missing release notes or schema source');
+    else {
+      const declared = readFileSync(note, 'utf8').match(/Schema is \*\*([0-9]+)\*\*/)?.[1];
+      const actual = readFileSync(source, 'utf8').match(/CURRENT_SCHEMA_VERSION = ([0-9]+)/)?.[1];
+      if (!actual || declared !== actual) failures.push('Current release schema differs from CURRENT_SCHEMA_VERSION');
+    }
+  }
   if (candidate && candidate !== version) failures.push("README.md: candidate version differs from package.json");
   return failures;
 }

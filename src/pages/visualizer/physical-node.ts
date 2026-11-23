@@ -4,6 +4,7 @@ import type {
   RackFace,
 } from "@/lib/types";
 import type { VisualizerRackFaceMode } from "./types";
+import { faceGeometry, faceUnitPoint } from "../../lib/physical-face";
 
 export const PHYSICAL_NODE_WIDTH = 360;
 export const PHYSICAL_NODE_HEADER_HEIGHT = 52;
@@ -111,7 +112,8 @@ export function buildPhysicalNodePresentation(input: {
     const definition = layout.snapshot.faces[face];
     const labelTop = cursor;
     const top = labelTop + PHYSICAL_NODE_FACE_LABEL_HEIGHT;
-    const height = contentWidth * (definition.height / definition.width);
+    const geometry = faceGeometry(definition);
+    const height = contentWidth * (geometry.height / geometry.width);
     frames.push({ face, labelTop, top, height });
     cursor = top + height + PHYSICAL_NODE_FACE_GAP;
   }
@@ -127,15 +129,16 @@ export function buildPhysicalNodePresentation(input: {
     const definition = layout.snapshot.faces[slot.face];
     const slotCenterX = slot.x + slot.width / 2;
     const slotCenterY = slot.y + slot.height / 2;
+    const point = faceUnitPoint(definition, slotCenterX, slotCenterY);
     return [
       {
         portId: binding.portId,
         face: slot.face,
         x:
           PHYSICAL_NODE_PADDING_X +
-          (slotCenterX / definition.width) * contentWidth,
-        y: frame.top + (slotCenterY / definition.height) * frame.height,
-        side: slotCenterX < definition.width / 2 ? "left" : "right",
+          point.x * contentWidth,
+        y: frame.top + point.y * frame.height,
+        side: point.x < 0.5 ? "left" : "right",
       } satisfies PhysicalNodePortAnchor,
     ];
   });

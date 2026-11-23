@@ -1,3 +1,4 @@
+import { startExternalHealthPollingLoop } from "./lib/integrations/external-health-polling.js";
 import { db } from './db.js'
 import { createApp } from './app.js'
 import { purgeExpiredSessions } from './lib/auth.js'
@@ -27,6 +28,7 @@ const stopIntegrationStatusSync = startIntegrationStatusSyncLoop(
   runtimeConfig.integrationStatusSyncIntervalMs,
 )
 const stopIntegrationAutoSync = startIntegrationAutoSyncLoop()
+const stopExternalHealth = startExternalHealthPollingLoop()
 const stopTrapReceiver = startSnmpTrapReceiver()
 const stopNativeBackupSchedule = startNativeBackupScheduleLoop()
 const stopSnmpSyncSchedules = startSnmpSyncScheduleLoop()
@@ -42,6 +44,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     stopDockerStatusSync()
     stopIntegrationStatusSync()
     stopIntegrationAutoSync()
+    stopExternalHealth()
     stopTrapReceiver()
     stopNativeBackupSchedule()
     stopSnmpSyncSchedules()

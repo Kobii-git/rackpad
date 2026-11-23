@@ -6,6 +6,118 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.9.0]
+
+### Added
+
+- Room floorplans with rack and device markers, printable device and cable
+  references, portable hardware templates, and device face appearance controls.
+- Read-only external inventory and health integrations for Uptime Kuma, Glances,
+  PatchMon, NUT, Redfish, and Home Assistant. Health polling remains opt-in.
+- ntfy notifications, persisted delivery retries, and lab-scoped audit history
+  that survives inventory deletion.
+
+### Fixed
+
+- Require a replacement provider credential before moving a stored credential
+  to a different endpoint or weakening TLS verification.
+- Reject invalidated provider readings when binding records and preserve source
+  identity when matching imported devices.
+- Deliver the first outage alert for a continuing offline monitor that has no
+  recorded delivery after an upgrade or restore.
+- Update Fastify static serving and the MCP Node adapter's Hono dependencies to
+  patched versions.
+
+### Changed
+
+- Schema 62 adds service endpoint metadata, notification and audit state, device
+  and cable references, floorplans, and external health configuration. Keep a
+  paired pre-upgrade database snapshot, configuration, key, and image for rollback.
+
+See the [release and upgrade notes](docs/releases/v1.9.0.md).
+
+## 1.9.0-beta.7
+
+### Added
+
+- Export saved hardware templates as portable JSON and import validated new
+  copies mapped to local device types, preserving existing drafts and devices (#164).
+- Choose Graphite, Silver or Ivory chassis skins and quarter-turn face
+  orientations in template and device layout editing, including directly mounted
+  equipment. Cable anchors, editing, stacks and SVG/PNG exports follow the faces (#164).
+
+### Fixed
+
+- Compute audit counts across every stored event matching the active lab and
+  filters, offer complete action choices and automatically load older matching
+  pages while scrolling (#241).
+- Update the static plugin and scoped development-tool glob matchers to patched
+  releases, with cancellation, expansion-bound and matching compatibility checks.
+
+See the [beta test and upgrade notes](docs/releases/v1.9.0-beta.7.md).
+
+## 1.9.0-beta.6
+
+### Fixed
+
+- Refresh Discovery schedules and discovered hosts on page entry, focus and
+  visible polling without replacing unsaved inspector edits (#230).
+- Count distinct audit actors, page through older lab-scoped history and filter
+  stored events by action or search while preserving historical access rules (#237).
+
+See the [beta test and upgrade notes](docs/releases/v1.9.0-beta.6.md).
+
+## 1.9.0-beta.5
+
+- Add bearer-authenticated Home Assistant inventory and entity readings through
+  REST states and two guarded, read-only WebSocket registry requests (#220).
+- Preserve stable device/entity registry identities, expose restricted-account
+  grouping limitations and keep missing, disabled and stale observations unknown.
+- Include MQTT, Z-Wave, Zigbee and Matter entities exposed by Home Assistant;
+  perform no service calls, state changes, subscriptions or direct broker access.
+- Apply the existing collection deadline across DNS and redirects for health HTTP
+  reads. Schema remains 62; polling, adoption and monitor alerts stay opt-in.
+
+## 1.9.0-beta.4
+
+- Add read-only NUT UPS inventory and health with pinned native TCP, STARTTLS
+  before credentials, bounded framing and an explicit unencrypted-transport opt-in.
+- Add read-only Redfish hardware, firmware and supported power/thermal readings,
+  bounded same-origin pagination and explicit unavailable-capability warnings.
+- Append schema 62 for strictly validated provider connection options with atomic
+  logical/native recovery and compatible encrypted-transport defaults.
+
+## 1.9.0-beta.3
+
+- Add Glances API v4 host inventory and CPU, memory, filesystem, network and
+  sensor readings through read-only plugin endpoints.
+- Add explicitly configured anonymous Glances access alongside Basic and bearer
+  authentication; anonymous connections retain no credentials.
+- Add PatchMon scoped `host:get` inventory/package summaries, preserving agent
+  observation times and unknown health for stale or pending reports.
+
+## 1.9.0-beta.2
+
+- Add read-only Uptime Kuma Prometheus inventory and latest external readings.
+- Add explicit same-lab record bindings, opt-in external monitors and polling
+  disabled by default; stale, missing and obsolete observations remain unknown.
+- Preserve schema-61 settings, bindings, latest readings and mappings in logical
+  and native recovery; require fresh observations after restart or restore.
+
+## 1.9.0-beta.1
+
+- Add room floorplans using selected room reference images and normalized rack/device markers, keyboard/drag editing, zoom and viewer navigation (#214).
+- Schema 60 keeps floorplans separate from inventory and Rack Studio; transactional room-move/deletion pruning and validated recovery preserve ownership.
+
+## 1.9.0-beta.0
+
+- Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).
+- Schema 59 preserves references through recovery; rollback requires a paired pre-upgrade snapshot.
+
+### Fixed
+
+- Stage management IPs and actual host interfaces in Proxmox API imports while preserving existing manual inventory (#208).
+
 ## [1.8.7] - 2026-11-07
 
 ### Fixed
@@ -29,6 +141,63 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 See the [release and upgrade notes](docs/releases/v1.8.7.md).
 
+## [1.8.7-beta.1]
+
+### Fixed
+
+- Preserve lab-scoped audit history after inventory deletion, record deletion
+  events atomically on the server, and retain scopes through recovery (#211).
+- Report disabled notification settings clearly, retain sanitized failed-test
+  history, and keep history-refresh errors separate from delivery results (#199, #202).
+
+### Changed
+
+- Schema 58 stores audit ownership independently of deleted inventory. Keep the
+  previous image with its pre-upgrade database snapshot for rollback.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.7-beta.1.md).
+
+## [1.8.7-beta.0] - 2026-10-29
+
+### Added
+
+- Dedicated ntfy publishing with encrypted write-only access tokens, guarded
+  requests and localized administration controls (#202).
+- Persisted pending notification events, retry throttling and complete
+  per-channel outcomes. A successful channel counts as delivery; total failures
+  retry without losing outage/recovery identity (#199).
+- Actual schema-55 stable container upgrade coverage, preserving service
+  relationships and documented endpoints through restart and paired rollback.
+
+### Fixed
+
+- Pin every Docker Node stage to 22.23.4 and reject affected candidate runtimes
+  in image smoke validation (#206).
+- Revoked MCP tokens leave the active list, retain labelled history and allow
+  repeated creation; proposal-loading failures no longer block token refresh (#203).
+- Collector JSON imports stage host management IPs and adapters, preserve linked
+  ports on reimport, and report conflicts and partial failures (#208).
+- Passive-device hover details use hostname/type/display-name order and include
+  rack/U placement, with shared personal field preferences across canvases (#198).
+- Failed notifications no longer advance successful-delivery timestamps or
+  suppress outage retries. New observations supersede stale async completions.
+- Repeated duplication of one hardware template creates independent copies
+  with distinct IDs and available names, including without renaming the first copy (#190).
+- Host IP staging excludes gateway/DNS and technical addresses and respects
+  DHCP-zone eligibility before starting host writes (#208).
+- Release guidance and its checked schema declaration match the migration.
+
+### Changed
+
+- Independently apply the remaining reviewed dependency/tool maintenance updates,
+  including compatible MCP and transitive security patches.
+- Schema advances from stable 55 / prior beta 56 to 57. Retain a consistent
+  pre-upgrade snapshot with the previous image and configuration/key for rollback.
+- Portable exports redact ntfy tokens; native snapshots retain encrypted values.
+  Existing SMTP/Discord/Telegram credential import semantics remain compatible.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.7-beta.0.md).
+
 ## [1.8.6] - 2026-10-29
 
 ### Fixed
@@ -39,6 +208,34 @@ See the [release and upgrade notes](docs/releases/v1.8.7.md).
   to address the advisories found during maintenance validation.
 
 See the [release and upgrade notes](docs/releases/v1.8.6.md).
+
+## [1.8.6-beta.0] - 2026-10-22
+
+### Added
+
+- Shared device details on hover and keyboard focus across classic racks, Studio
+  and every Visualizer layout, including available hostname, hardware, management
+  IP and MAC fields (#198).
+- Saved room/rack colors fill the Racks / Rooms navigation name-and-count rows,
+  with contrasting text and separate selection/focus indicators (#195).
+
+### Fixed
+
+- Accessible names include visible sidebar, monitoring and stack-control labels
+  with Axe 4.14; rack and Studio button names follow their content (#191).
+- Stack-member screenshot captures wait for final control frames and retain exact
+  image equality and all existing behavior assertions (#197).
+
+### Changed
+
+- Update the reviewed MCP, Fastify, Nodemailer, React, Lucide, Zod, accessibility,
+  browser and formatter dependencies through npm (#191).
+- Update CodeQL evidence uploads to actions/upload-artifact v7 while preserving
+  raw failure evidence, artifact paths and permissions (#192).
+- Node 22 remains the application runtime. Development accessibility tooling
+  requires Node 22.12 or newer within Node 22. Schema remains 55 relative to 1.8.5.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.6-beta.0.md).
 
 ## [1.8.5] - 2026-10-20
 

@@ -93,12 +93,13 @@ export default function CableView() {
   const ports = useStore((s) => s.ports);
   const devices = useStore((s) => s.devices);
   const canEdit = canEditInventory(currentUser);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("reference") || "");
   const [cableType, setCableType] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState<CableSortKey>>({
     key: "from",
     direction: "asc",
   });
+  const [hideDisabled, setHideDisabled] = useState(false);
   const [createForm, setCreateForm] = useState<CableFormState>(EMPTY_FORM);
   const [selectedLinkId, setSelectedLinkId] = useState<string>();
   const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(
@@ -156,6 +157,7 @@ export default function CableView() {
           link.cableType,
           link.color,
           link.notes,
+          link.publicReference,
         ]
           .filter(Boolean)
           .join(" ")
@@ -188,13 +190,13 @@ export default function CableView() {
 
   const availablePorts = useMemo(() => {
     return [...ports]
-      .filter((port) => !linkedPortIds.has(port.id))
+      .filter((port) => !linkedPortIds.has(port.id) && (!hideDisabled || port.linkState !== "disabled"))
       .sort((a, b) =>
         portOptionLabel(a, deviceById).localeCompare(
           portOptionLabel(b, deviceById),
         ),
       );
-  }, [deviceById, linkedPortIds, ports]);
+  }, [deviceById, linkedPortIds, ports, hideDisabled]);
 
   const selectedLink = selectedLinkId
     ? portLinks.find((link) => link.id === selectedLinkId)
@@ -436,6 +438,16 @@ export default function CableView() {
               </Badge>
             </CardHeader>
             <CardBody className="space-y-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={hideDisabled} onChange={event => {
+                  const hide = event.target.checked;
+                  setHideDisabled(hide);
+                  if (hide) setCreateForm(form => ({ ...form,
+                    fromPortId: portById[form.fromPortId]?.linkState === "disabled" ? "" : form.fromPortId,
+                    toPortId: portById[form.toPortId]?.linkState === "disabled" ? "" : form.toPortId,
+                  }));
+                }} />{t("Hide Disabled Ports")}
+              </label>
               <div className="grid gap-3 md:grid-cols-2">
                 <Field label={t("From port")}>
                   <Select

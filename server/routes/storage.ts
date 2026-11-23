@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
@@ -502,7 +503,7 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>(
     "/drive-bay-templates/:id",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "DriveBayTemplate", entityId: req.params.id, action: "storage.template.delete" }, () => {
       if (!assertGlobalAdmin(req, reply)) return;
       if (
         BUILT_IN_DRIVE_BAY_TEMPLATES.some(
@@ -532,8 +533,8 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
           req.params.id,
         );
       })();
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 
   app.get<{ Querystring: { labId?: string; deviceId?: string } }>(
@@ -827,7 +828,7 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>(
     "/drive-slots/:id",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "DriveSlot", entityId: req.params.id, action: "storage.slot.delete" }, () => {
       const slot = db
         .prepare(
           `
@@ -854,8 +855,8 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
         });
         db.prepare("DELETE FROM driveSlots WHERE id = ?").run(req.params.id);
       })();
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 
   app.get<{ Querystring: { labId?: string; deviceId?: string } }>(
@@ -1031,7 +1032,7 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(result);
   });
 
-  app.delete<{ Params: { id: string } }>("/drives/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/drives/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "StorageDrive", entityId: req.params.id, action: "storage.drive.delete" }, () => {
     const existing = getDrive(req.params.id);
     if (!assertLabWriteFromRow(req, reply, existing)) return;
     const membership = db
@@ -1052,8 +1053,8 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
       });
       db.prepare("DELETE FROM storageDrives WHERE id = ?").run(req.params.id);
     })();
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 
   app.get<{ Querystring: { labId?: string; deviceId?: string } }>(
     "/pools",
@@ -1253,7 +1254,7 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(result);
   });
 
-  app.delete<{ Params: { id: string } }>("/pools/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/pools/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "StoragePool", entityId: req.params.id, action: "storage.pool.delete" }, () => {
     const existing = getPool(req.params.id);
     if (!assertLabWriteFromRow(req, reply, existing)) return;
     db.transaction(() => {
@@ -1266,6 +1267,6 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
       });
       db.prepare("DELETE FROM storagePools WHERE id = ?").run(req.params.id);
     })();
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };

@@ -96,7 +96,7 @@ containers.
    - CPU, RAM, disks, and OS/spec notes
    - IPs
    - Virtual switches/bridges
-   - Virtual ports
+   - Ports (host adapters and guest NICs)
    - VLANs
 6. Review every QEMU VM and LXC container, then fill in anything Proxmox could
    not report.
@@ -105,6 +105,32 @@ containers.
 If `Host record` is checked, Rackpad creates or updates the selected/matched
 host record. If `Host record` is unchecked, the selected/matched host is only
 used as the parent for VMs, containers, and virtual switches.
+
+### Host networking
+
+The host panel stages collected host and adapter IPv4 addresses. An existing host
+keeps its management IP; a new host preselects an address only when one eligible
+candidate is unambiguous. Choose the address before importing when several exist.
+Addresses need a healthy documented subnet and must not belong to another device;
+blocked choices explain the reason. DHCP scopes and static zones keep the normal
+IPAM rules. Gateway/DNS and reserved/infrastructure addresses cannot be selected
+as normal host management assignments; DHCP candidates must meet the documented
+DHCP-zone rules. None leaves an existing management address unchanged.
+
+With **Host record** and **Ports** enabled, select the host adapters to import.
+Matching interface names update existing ports without replacing their IDs,
+connector choice or cable links. Conflicting MACs or ambiguous names are skipped
+and reported. A MAC alone never merges interfaces: bonds and bridges can share it.
+Known bridges use virtual ports; an unknown physical connector uses Other. MAC,
+speed, state and reported interface details are retained. Adapter IPs remain in
+port descriptions; the selected management IP receives the host IPAM assignment.
+
+Reimporting does not delete absent or manual ports. Per-adapter failures are
+reported while other selected adapters continue. Disabling IPs preserves management
+addresses; disabling Ports prevents host and guest port writes. These host controls
+also apply to Hyper-V collector JSON. Retain a consistent backup before importing
+into an important inventory; the import is a sequence of reported writes, not an
+all-or-nothing batch rollback.
 
 ## Review Wizard Checklist
 

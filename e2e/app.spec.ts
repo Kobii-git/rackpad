@@ -2596,6 +2596,7 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
       `[data-testid="rack-studio-rack-top-device"][data-hostname="${hostname}"]`,
     );
     await expect(rackTopDevice).toBeVisible();
+    await expect(rackTopDevice).toHaveAccessibleName(new RegExp(hostname));
     await rackTopDevice.focus();
     await rackTopDevice.press("ArrowRight");
     await expect
@@ -4045,7 +4046,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
     firewallMonitoring.getByRole("button", { name: "Check now" }),
   ).toBeDisabled();
   await expect(firewallMonitoring).not.toContainText("Last checked");
-  await page.getByRole("button", { name: "Show compact monitor rows" }).click();
+  await page.getByRole("button", { name: "Compact: Show compact monitor rows", exact: true }).click();
   const firewallMonitorRow = page.locator(
     '[data-testid="device-monitor-row"][data-device-id="d_fw"]',
   );
@@ -4624,7 +4625,7 @@ test("legacy enabled none monitors stay effectively disabled", async ({
   await expect(
     upsCard.getByRole("button", { name: "Check now" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Show compact monitor rows" }).click();
+  await page.getByRole("button", { name: "Compact: Show compact monitor rows", exact: true }).click();
   const upsRow = page.locator(
     '[data-testid="device-monitor-row"][data-device-id="d_ups"]',
   );
@@ -4699,7 +4700,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
         "Envoyer le test",
         "Enregistrer les notifications",
       ],
-      channel: "Discord / Telegram / E-mail",
+      channel: "Alertes",
     },
     {
       language: "ar",
@@ -4713,7 +4714,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
         "إرسال الاختبار",
         "حفظ الإخطارات",
       ],
-      channel: "Discord / Telegram / البريد الإلكتروني",
+      channel: "التنبيهات",
     },
   ];
 
@@ -4728,7 +4729,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
     await expect
       .poll(() => page.evaluate(() => document.documentElement.dir))
       .toBe(mode.direction);
-    await expect(page.getByText(mode.channel, { exact: true })).toBeVisible();
+    await expect(page.getByText(mode.channel, { exact: true }).and(page.locator("span"))).toBeVisible();
 
     const rolePicker = page.getByTestId("admin-role-picker");
     await expect(rolePicker).toBeVisible();
@@ -5233,7 +5234,7 @@ test("patch-panel hardware templates author, apply, and render both faces", asyn
       .first()
       .fill(templateId);
     await builder
-      .getByRole("textbox", { name: "Name", exact: true })
+      .getByRole("textbox", { name: "Template name", exact: true })
       .fill(`E2E patch panel ${suffix}`);
     const saveTemplateResponse = page.waitForResponse(
       (response) =>
@@ -6024,13 +6025,21 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     await memberFilter.focus();
     await expect(memberFilter).toBeFocused();
     await workspace.scrollIntoViewIfNeeded();
+    // Let the save controls finish transitioning and commit their final frame.
     await workspace.evaluate(async (element) => {
       await document.fonts.ready;
-      await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished));
-      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished),
+      );
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
     });
     await expect(workspace).toBeInViewport({ ratio: 1 });
-    // The focused select has no blinking caret. Keep input styles stable during capture.
+    // Focus is on a select, so no caret can blink. Preserve caret styles to avoid
+    // screenshot() repainting every input and the translucent rounded card borders.
     const firstCapture = await workspace.screenshot({
       path: testInfo.outputPath("stack-members.png"),
       animations: "disabled",
@@ -6443,7 +6452,7 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
     await client.close();
     if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
   }
-  await page.getByText(tokenName, { exact: false }).locator("..").getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByText(tokenName, { exact: false }).locator("..").getByRole("button", { name: "Revoke", exact: true }).click();
   const revoked = await request.post("/api/mcp", {
     headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
     data: { jsonrpc: "2.0", id: 1, method: "ping" },
@@ -6655,6 +6664,7 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
       const count=index?24:26;
       for(const face of index?["front","rear"] as const:["rear"] as const) template=replacePortBlock(template,{id:`ports-${face}`,face,connector:index?"rj45":"sfp_plus",count,rows:2,columns:count/2,start:1,direction:"left-to-right",x:100,y:50,width:800,height:100});
       if(!index){template.moduleSlots=[{id:"uplink-position",face:"rear",x:200,y:180,width:300,height:90}];template.modules=[createHardwareModule("uplink-module","Applied uplink module","uplink-position","sfp_plus",2,template.moduleSlots[0])];}
+      if(index===1){template.front.rotation=90;template.front.skin="silver";template.front.elements=[{kind:"vent",id:"rotated-vent",x:10,y:20,width:100,height:40}];}
       await post("/api/hardware-templates",template);templates.push(template.id);
       const preview=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/preview`,{templateId:template.id,moduleIds:template.modules.map(module=>module.id)});
       const applied=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/apply`,{...preview,approvedPortSlotIds:preview.portsToCreate.map((port:{slotId:string})=>port.slotId).slice(index === 0 ? 1 : 0)});canonical.push(...applied.createdPortIds);
@@ -6683,8 +6693,11 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
     expect(after.bindings).toEqual(expect.arrayContaining(before.bindings));
     await page.goto("/racks");await page.getByRole("button",{name:"Studio Beta",exact:true}).click();await page.getByRole("button",{name:new RegExp(`${room.name} 1R`)}).click();await page.getByRole("button",{name:"Both",exact:true}).click();await page.getByRole("button",{name:"Cables",exact:true}).click();
     const targets=page.locator('[data-testid="rack-studio-device"] [data-cabling-selection-id^="port:"]');expect(await targets.count()).toBeGreaterThanOrEqual(220);
+    const grille=page.locator('svg[role="img"] g[transform^="matrix("] path[d^="M 22.5 26 V 54"]').first();
+    await expect(grille).toBeVisible();expect((await grille.getAttribute("d"))!.match(/M /g)).toHaveLength(7);
     const svgDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Download SVG",exact:true}).click();const svg=await readFile((await(await svgDownload).path())!,"utf8");
     expect(svg.match(new RegExp(`<title>${stack.hostname}:`,'g'))).toHaveLength(220);
+    expect(svg).toContain('transform="matrix(');expect(svg).toContain('<path d="M 22.5 26 V 54');
     const pngDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Download PNG",exact:true}).click();const png=await readFile((await(await pngDownload).path())!);expect(png.subarray(0,8).toString("hex")).toBe("89504e470d0a1a0a");
   } finally {
     await request.delete(`/api/devices/${stack.id}`,{headers});for(const id of templates)await request.delete(`/api/hardware-templates/${id}`,{headers});await request.delete(`/api/racks/${rack.id}`,{headers});await request.delete(`/api/rooms/${room.id}`,{headers});

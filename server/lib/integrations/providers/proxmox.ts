@@ -353,6 +353,8 @@ interface ProxmoxNetworkEntry {
   gateway: string;
   bridgePorts: string;
   active: boolean;
+  linkState: "up" | "down" | "unknown";
+  macAddress: string | null;
   comments: string;
   ovsBridge: string;
 }
@@ -392,6 +394,8 @@ function withSyntheticOvsBridges(
       gateway: "",
       bridgePorts: info.ports.sort().join(" "),
       active: info.active,
+      linkState: info.active ? "up" : "unknown",
+      macAddress: null,
       comments: "",
       ovsBridge: "",
     });
@@ -403,9 +407,9 @@ function withSyntheticOvsBridges(
 
 function parseNodeNetwork(data: unknown): ProxmoxNetworkEntry[] {
   return asArray(data)
-    .map((entry) => {
+    .map((entry): ProxmoxNetworkEntry => {
       const row = asRecord(entry);
-      const address = asText(row.address);
+      const address = cleanIpv4(row.address) || cleanIpv4(row.cidr);
       const netmask = asText(row.netmask);
       let cidr = asText(row.cidr);
       if (!cidr && address && netmask.includes(".")) {
@@ -426,7 +430,10 @@ function parseNodeNetwork(data: unknown): ProxmoxNetworkEntry[] {
         cidr,
         gateway: asText(row.gateway),
         bridgePorts: asText(row.bridge_ports || row.ovs_ports),
-        active: Boolean(row.active),
+        active: enabledFlag(row.active),
+        linkState: row.active == null ? "unknown" : enabledFlag(row.active) ? "up" : "down",
+        // Some API versions omit hardware metadata. Do not invent a MAC or speed.
+        macAddress: asText(row.hwaddr || row.hwaddress || row.mac) || null,
         comments: asText(row.comments),
         ovsBridge: asText(row.ovs_bridge),
       };
@@ -532,15 +539,38 @@ async function proxmoxFetchInventory(
 
   for (const node of nodes) {
     const requestErrors: string[] = [];
-    const network = withSyntheticOvsBridges(
-      parseNodeNetwork(
-        await tryProxmoxGet(
-          connection,
-          `/nodes/${node.node}/network`,
-          requestErrors,
-        ),
+    const interfaces = parseNodeNetwork(
+      await tryProxmoxGet(
+        connection,
+        `/nodes/${node.node}/network`,
+        requestErrors,
       ),
     );
+    const network = withSyntheticOvsBridges(interfaces);
+    const addressed = interfaces.filter(entry => entry.address).sort((a, b) =>
+      Number(Boolean(b.gateway)) - Number(Boolean(a.gateway)) ||
+      Number(b.active) - Number(a.active) || a.iface.localeCompare(b.iface),
+    );
+    const primary = addressed[0];
+    const hostMac = primary?.macAddress ?? interfaces.find(entry => entry.macAddress)?.macAddress ?? null;
+    const host = devices.find(entry => entry.kind === "host" && entry.name === node.node)!;
+    host.ipAddress = primary?.address || null;
+    host.macAddress = hostMac;
+    const importable = importableDevices.find(entry => entry.deviceType === "server" && entry.name === node.node);
+    if (importable) {
+      importable.ipAddress = host.ipAddress;
+      importable.macAddress = hostMac;
+      // Bridges/bonds/VLANs remain virtual. Synthetic OVS bridges have no actual
+      // interface row and must not create an invented host adapter.
+      importable.ports = interfaces.map(entry => ({
+        name: entry.iface,
+        kind: entry.type === "eth" || entry.type === "OVSPort" ? "rj45" : "virtual",
+        speed: null,
+        linkState: entry.linkState,
+        macAddress: entry.macAddress,
+        ipAddresses: entry.address ? [entry.address] : [],
+      }));
+    }
     for (const entry of network) {
       if (isBridgeInterface(entry)) {
         devices.push({

@@ -1,3 +1,5 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
+import { parseServiceEndpoint } from '../lib/service-endpoint.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import {
@@ -41,6 +43,8 @@ function parseService(row: Record<string, unknown>) {
     monitorId: row.monitorId ? String(row.monitorId) : null,
     url: row.url ? String(row.url) : null,
     notes: row.notes ? String(row.notes) : null,
+    networkPort: row.networkPort == null ? null : Number(row.networkPort),
+    transportProtocol: row.transportProtocol as 'tcp' | 'udp' | null,
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt),
   }
@@ -120,12 +124,13 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
     const monitorId = optionalString(body, 'monitorId', { maxLength: 80 })
     const url = optionalString(body, 'url', { maxLength: 500 })
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
+    const endpoint = parseServiceEndpoint(body)
     const now = new Date().toISOString()
 
     db.prepare(`
       INSERT INTO deviceServices
-        (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, networkPort, transportProtocol, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       deviceId,
@@ -137,6 +142,8 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
       monitorId ?? null,
       url ?? null,
       notes ?? null,
+      endpoint.networkPort,
+      endpoint.transportProtocol,
       now,
       now,
     )
@@ -184,6 +191,13 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    if ('networkPort' in body || 'transportProtocol' in body) {
+      const current = parseService(getService(req.params.id)!)
+      const endpoint = parseServiceEndpoint(body, current)
+      updates.push('networkPort = ?', 'transportProtocol = ?')
+      values.push(endpoint.networkPort, endpoint.transportProtocol)
+    }
+
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No valid fields to update.' })
     }
@@ -195,10 +209,10 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
     return parseService(getService(req.params.id)!)
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "DeviceService", entityId: req.params.id, action: "device.service.delete" }, () => {
     const existing = getServiceLabRow(req.params.id)
     if (!assertLabWriteFromRow(req, reply, existing)) return
     db.prepare('DELETE FROM deviceServices WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

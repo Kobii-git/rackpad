@@ -80,6 +80,16 @@ constraints for changes.
   data, and encrypted controller credentials even when selected notification
   secrets are redacted.
 
+## Dependency overrides
+
+- The minimatch overrides are scoped to ESLint, its config-array package, and
+  TypeScript ESTree. Their used matching APIs are covered by
+  `check:dependencies` and `lint:proof`; remove these overrides when the parent
+  packages support the patched major themselves.
+- Keep the static plugin's glob dependency on its supported range. Do not apply
+  a blanket minimatch override: glob 13 expects matcher internals removed in
+  minimatch 11, while the updated static plugin uses compatible glob 14.
+
 ## High-risk files
 
 - `server/app.ts`, `server/lib/auth.ts`, `server/lib/oidc.ts`,
@@ -103,3 +113,61 @@ bounded where supported. SNMPv3 MD5/SHA1 rationale stays inline in
 the exact file hash, unchanged server tree and automated expiry; raw CodeQL
 analysis remains available. They do not justify weak hashes elsewhere or automatic
 renewal of the reviewed source/expiry policy.
+
+
+## Notification delivery
+
+ntfy topic publishing uses DNS-pinned guarded HTTP/S with redirects disabled,
+verified TLS, bounded response bytes and an absolute transport deadline. Tokens
+are write-only, encrypted with the existing secret key, require HTTPS, and never
+appear in public settings or portable backups. Native snapshots retain the
+ciphertext and require the matching key. Channel diagnostics use allowlisted
+categories; never include provider response bodies or authorization headers.
+A partial channel success counts as delivery, with failures reported separately.
+
+## Audit history ownership
+
+Audit lab scopes are server-derived snapshots. Client-provided scopes are ignored.
+Unscoped history is admin-only; entity-specific non-admin reads require current
+read permission for every captured lab, including both cable endpoints. Global
+listing remains admin-only. Audit summaries and action choices are also admin-only
+and require an explicit lab. Totals cover all stored events matching that lab's
+search/action filters; action choices cover that lab's complete history, excluding
+unscoped events. Existing entity reads retain their bounded array response.
+Deleted subjects do not remove event ownership, and
+revoked grants immediately remove access to their historical events.
+
+External health endpoints require existing lab read/write permissions. Provider
+credentials remain encrypted and write-only. Health HTTP collectors reuse pinned
+DNS, reserved-address blocking, TLS verification, bounded bodies and one overall
+15-second collection deadline. Requests recheck configuration and cancellation
+after awaits; user-facing asynchronous responses also reload actor/grants.
+Collection failures store static categories rather than provider response text.
+No external-health listener, host networking or root requirement is added.
+
+Glances supports explicit `anonymous` authentication only when chosen by the user;
+its default remains username/password. Anonymous create/update clears both stored
+auth ID and encrypted secret. No other provider accepts anonymous authentication.
+Glances reads only individual v4 inventory/metric plugins, never process/all
+endpoints. PatchMon uses Basic Integration API credentials with `host:get`, GET
+hosts with inline stats only, and never enrolment, patch or queue operations.
+
+NUT uses a pinned numeric destination after reserved-address/DNS validation and
+native TCP STARTTLS before credentials by default, TLS 1.2 minimum and original
+hostname verification. Unencrypted transport is an explicit per-NUT option.
+Its typed encoder emits only STARTTLS, USERNAME, PASSWORD, LIST UPS and LIST VAR;
+there is no raw-command entry point. Sessions/lines/bytes/UPS counts are bounded.
+Redfish follows GET-only same-origin service/resource links, bounded pagination,
+and fixed capability links; it never follows Actions or emits mutation requests.
+Advertised metric timestamps remain observation times. Neither transport adds an
+inbound listener, host network requirement or root requirement.
+
+Home Assistant uses an encrypted bearer access token for GET states and an
+outbound WebSocket authentication exchange. The typed command allowlist contains
+only device/entity registry reads. WebSocket DNS is pinned to a validated numeric
+address while retaining the original Host, TLS SNI and certificate hostname check.
+Redirects, compression and automatic pong responses are disabled; bounded control
+responses, messages, fragments and payloads share the collection deadline. TLS or
+network failures fail collection rather than falling back silently. Explicit
+registry permission/capability denial permits entity-only readings with a warning.
+Neither provider attributes nor registry configuration URLs become request targets.

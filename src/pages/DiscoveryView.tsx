@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
@@ -37,6 +37,7 @@ import {
   createDiscoveryScanSchedule,
   deleteDiscoveredDeviceRecord,
   deleteDiscoveryScanScheduleRecord,
+  refreshDiscoveryInventory,
   runDeviceMonitorCheck,
   runDiscoveryScanScheduleNow,
   scanDiscoveredSubnet,
@@ -126,6 +127,32 @@ export default function DiscoveryView() {
   const ipZones = useStore((s) => s.ipZones);
   const discoveredDevices = useStore((s) => s.discoveredDevices);
   const discoveryScanSchedules = useStore((s) => s.discoveryScanSchedules);
+  useEffect(() => {
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (pending || document.visibilityState === "hidden") return;
+      pending = true;
+      try {
+        await refreshDiscoveryInventory(() => active);
+      } catch {
+        // Keep the last successful snapshot; the next visible refresh retries.
+      } finally {
+        pending = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 30_000);
+    const onVisible = () => void refresh();
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [lab.id, currentUser?.id]);
   const canEdit = canEditInventory(currentUser);
   const canManageDiscovery = currentUser?.role === "admin";
   const [scanCidr, setScanCidr] = useState("");
@@ -140,6 +167,9 @@ export default function DiscoveryView() {
   const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState("60");
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [draft, setDraft] = useState<DiscoveryDraft | null>(null);
+  const draftBaseline = useRef<{ key: string; value: DiscoveryDraft } | null>(
+    null,
+  );
   const [scanning, setScanning] = useState(false);
   const [activeScanJob, setActiveScanJob] = useState<DiscoveryScanJob | null>(
     null,
@@ -352,19 +382,30 @@ export default function DiscoveryView() {
 
   useEffect(() => {
     if (!selected) {
+      draftBaseline.current = null;
       setDraft(null);
       return;
     }
-    setDraft({
+    const next = {
       hostname: selected.hostname ?? "",
       displayName: selected.displayName ?? "",
       deviceType: selected.deviceType ?? "endpoint",
       placement: selected.placement ?? "room",
       notes: selected.notes ?? "",
       status: selected.status,
-    });
-    setError("");
-  }, [selected]);
+    };
+    const key = `${lab.id}:${selected.id}`;
+    const previous = draftBaseline.current;
+    setDraft((current) =>
+      previous?.key === key &&
+      current &&
+      JSON.stringify(current) !== JSON.stringify(previous.value)
+        ? current
+        : next,
+    );
+    draftBaseline.current = { key, value: next };
+    if (previous?.key !== key) setError("");
+  }, [selected, lab.id]);
 
   async function handleScan() {
     const scanCidrs =

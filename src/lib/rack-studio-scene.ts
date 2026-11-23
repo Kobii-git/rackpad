@@ -1,4 +1,4 @@
-import { physicalFaceRect } from "./physical-face";
+import { physicalFaceRect, faceUnitPoint } from "./physical-face";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -200,8 +200,6 @@ export function portAnchorsForEquipment(
   const anchors: RackStudioScenePortAnchor[] = [];
   for (const item of equipment) {
     const rect = physicalFaceRect(item.layout.snapshot.faces[item.physicalFace], item.rect);
-    const faceHeight =
-      item.layout.snapshot.faces[item.physicalFace].height || 1;
     for (const binding of item.layout.bindings) {
       const port = portById.get(binding.portId);
       const slot = item.layout.snapshot.portSlots.find(
@@ -210,8 +208,7 @@ export function portAnchorsForEquipment(
           candidate.face === item.physicalFace,
       );
       if (!port || !slot) continue;
-      const u = (slot.x + slot.width / 2) / 1000;
-      const v = (slot.y + slot.height / 2) / faceHeight;
+      const {x: u, y: v} = faceUnitPoint(item.layout.snapshot.faces[item.physicalFace], slot.x + slot.width / 2, slot.y + slot.height / 2);
       anchors.push({
         portId: port.id,
         deviceId: item.device.id,

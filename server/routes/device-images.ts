@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import {
@@ -159,10 +160,10 @@ export const deviceImagesRoutes: FastifyPluginAsync = async (app) => {
       .get(req.params.id);
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "DeviceImage", entityId: req.params.id, action: "device.image.delete" }, () => {
     const row = getDeviceImageLabRow(req.params.id);
     if (!assertLabWriteFromRow(req, reply, row)) return;
     db.prepare("DELETE FROM deviceImages WHERE id = ?").run(req.params.id);
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };

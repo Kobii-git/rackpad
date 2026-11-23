@@ -30,9 +30,9 @@ devices, ports, cables, Networks/IPAM, storage, Wi-Fi, compute, discovery,
 monitoring, documentation, images, integrations, reports, labs, and
 administration into one clean app.
 
-This source targets stable release **v1.8.7**.
+This source targets stable release **v1.9.0**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
-See the [release and upgrade notes](docs/releases/v1.8.7.md).
+See the [release and upgrade notes](docs/releases/v1.9.0.md).
 
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
@@ -81,6 +81,7 @@ contains the core material you need:
 - [Storage topology guide](./docs/STORAGE.md)
 - [Visualizer guide](./docs/VISUALIZER.md)
 - [OIDC login guide](./docs/OIDC.md)
+- [Service inventory and email alerts](./docs/SERVICES_AND_ALERTS.md)
 - [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
 - [Discovery deployment (Proxmox/LXC/host networking)](./docs/DISCOVERY_DEPLOYMENT.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)

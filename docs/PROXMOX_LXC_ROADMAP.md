@@ -15,12 +15,13 @@ stable-release phase has passed its exit gate.
 | 3. Discovery controls, operations, documentation, and CI | Complete |
 | 4. Beta 1 and fresh-install validation | In progress - real guest validation pending |
 | 5. Beta 2 update/rollback validation and soak | In progress - tester rollout authorized |
-| 6. Stable `v1.8.3` deployment | Planned |
+| 6. Supported native-LXC promotion | Pending the real-guest matrix and soak |
 | 7. Official Community Scripts submission | Blocked on upstream eligibility |
 
 ## Fixed decisions
 
-- The planned first stable native-LXC release is `v1.8.3`, after combined-candidate acceptance.
+- Stable Rackpad releases include the native installer. Native-LXC production
+  support remains pending the real-guest acceptance and soak gates below.
 - Production support targets Proxmox VE 9.x on `amd64`.
 - Debian 13 is the default guest; Ubuntu 24.04 LTS is also tested.
 - The default is an unprivileged LXC with nesting, 2 vCPU, 4 GB RAM, 16 GB
@@ -32,15 +33,17 @@ stable-release phase has passed its exit gate.
   versioned code and helper assets execute from that exact tag.
 - The initial Community Scripts core pin is
   `7cea42d8a3f7164d1813906f386c6d690eba7fc5`.
-- Issue #138 stays open until the official Community Scripts submission is
-  accepted. The external listing does not block main after Rackpad acceptance and soak.
+- Issue #138 is closed following the installer delivery. The remaining native
+  acceptance matrix and official Community Scripts submission are tracked here;
+  closure does not establish production support or an accepted upstream listing.
+  The external listing does not block main after Rackpad acceptance and soak.
   The automation roadmap and Discussion #132 remain unchanged.
 
 ## Execution contract
 
-The current combined 1.8.3 release plan supersedes the historical phase prompts
-below; those prompts do not grant new publication authority. Each original
-implementation prompt completed exactly one phase. Before starting a
+The release-specific phase prompts below are historical records; they do not
+grant new publication authority or override the current status table above. Each
+original implementation prompt completed exactly one phase. Before starting a
 phase, verify the previous phase's exit gate. Work begins from a clean, current
 base, preserves unrelated changes, and uses `codex/proxmox-native-lxc` for the
 first-party implementation.
@@ -313,7 +316,11 @@ Phase 6 continuation prompt:
 
 ## Phase 6 - Stable `v1.8.3` deployment
 
-Status: **Planned**
+Status: **Historical delivery plan; native production support remains pending**
+
+Stable `v1.8.3` has shipped. The original deliverables below do not establish
+completion of the real-guest matrix or soak, and must not be replayed against an
+existing tag. Any support promotion requires fresh acceptance and release approval.
 
 Deliverables:
 

@@ -48,7 +48,7 @@ export type IpAssignmentType =
 export type IpZoneKind = "static" | "dhcp" | "reserved" | "infrastructure";
 export type IpAllocationMode = "static" | "dhcp-reservation";
 export type UserRole = "admin" | "editor" | "viewer";
-export type MonitorType = "none" | "icmp" | "tcp" | "http" | "https" | "snmp";
+export type MonitorType = "none" | "icmp" | "tcp" | "http" | "https" | "snmp" | "external";
 export type DiscoveryStatus = "new" | "imported" | "dismissed";
 export type WifiBand = "2.4ghz" | "5ghz" | "6ghz";
 export type VirtualSwitchKind = "external" | "internal" | "private";
@@ -120,6 +120,8 @@ export interface NativeBackupStatus {
 }
 
 export interface AlertSettings {
+  ntfyTopicUrl: string | null;
+  ntfyTokenConfigured: boolean;
   enabled: boolean;
   notifyOnDown: boolean;
   notifyOnRecovery: boolean;
@@ -184,6 +186,7 @@ export interface DeviceStackMember {
 }
 
 export interface Device {
+  publicReference?: string | null;
   labelPosition?: "upper-left" | "upper-right";
   stackMembers?: DeviceStackMember[];
   id: ID;
@@ -288,7 +291,7 @@ export type PhysicalLayoutStatus =
   | "needs-mapping"
   | "invalid";
 
-export type PhysicalFacePrimitiveV1 =
+export type PhysicalFacePrimitiveV1 = (
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
@@ -316,7 +319,7 @@ export type PhysicalFacePrimitiveV1 =
       y: number;
       text: string;
       align?: "start" | "middle" | "end";
-    };
+    }) & { projection?: import("../../server/lib/physical-face-projection").FaceArtworkProjection };
 
 export interface ArtworkReference {
   elementId: string;
@@ -328,6 +331,8 @@ export interface FaceDefinitionV1 {
   width: 1000;
   height: number;
   shape?: "round";
+  skin?: "graphite" | "silver" | "ivory";
+  rotation?: 0 | 90 | 180 | 270;
   elements: PhysicalFacePrimitiveV1[];
   artworkOrder?: ArtworkReference[];
 }
@@ -590,9 +595,10 @@ export interface SnmpSyncApplyResult {
 }
 
 export type IntegrationProvider =
-  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand";
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma" | "glances" | "patchmon" | "nut" | "redfish" | "home-assistant";
 
 export type IntegrationAuthKind =
+  | "anonymous"
   | "api-token"
   | "api-key"
   | "username-password"
@@ -608,6 +614,7 @@ export interface IntegrationProviderInfo {
   authKinds: IntegrationAuthKind[];
   defaultAuthKind: IntegrationAuthKind;
   scopeKind: IntegrationScopeKind | null;
+  capabilities?: { inventory: boolean; health: boolean };
 }
 
 export interface IntegrationScope {
@@ -618,6 +625,7 @@ export interface IntegrationScope {
 export type IntegrationAutoSyncMode = "merge" | "skip";
 
 export interface IntegrationConnection {
+  options?: {allowUnencrypted?:boolean};
   id: string;
   labId: string;
   provider: IntegrationProvider;
@@ -654,6 +662,10 @@ export interface IntegrationConnection {
   lastAutoSyncMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  healthPollingEnabled?: boolean;
+  healthIntervalSeconds?: number;
+  healthLastCheckedAt?: string | null;
+  healthLastError?: string | null;
 }
 
 export interface IntegrationTestResult {
@@ -711,6 +723,7 @@ export interface IntegrationImportableDevice {
     | "router"
     | "firewall"
     | "ap"
+    | "ups"
     | "server"
     | "vm"
     | "container"
@@ -890,6 +903,7 @@ export interface VirtualSwitch {
 }
 
 export interface PortLink {
+  publicReference?: string | null;
   id: ID;
   fromPortId: ID;
   toPortId: ID;
@@ -996,6 +1010,8 @@ export interface AdminIntegrityReport {
 }
 
 export interface DeviceService {
+  networkPort?: number | null;
+  transportProtocol?: "tcp" | "udp" | null;
   id: ID;
   deviceId: ID;
   name: string;
@@ -1054,6 +1070,7 @@ export interface IpZone {
 }
 
 export interface AuditEntry {
+  labIds?: ID[] | null;
   id: ID;
   ts: string;
   user: string;
@@ -1061,6 +1078,14 @@ export interface AuditEntry {
   entityType: string;
   entityId: ID;
   summary: string;
+}
+
+export interface AuditLogSummary {
+  entries: number;
+  users: number;
+  devices: number;
+  ports: number;
+  actions: string[];
 }
 
 export type LabRole = "editor" | "viewer";
@@ -1108,6 +1133,9 @@ export interface DiscoveredSnmpInterface {
 }
 
 export interface DeviceMonitor {
+  pendingAlertKind?: "down" | "recovery" | "repeat" | null;
+  pendingAlertAt?: string | null;
+  lastAlertAttemptAt?: string | null;
   id: ID;
   deviceId: ID;
   name: string;
@@ -1386,4 +1414,33 @@ export interface StackMemberLayoutPreview {
   linkedUnmappedPortIds: string[];
   portsToCreate: Array<{slotId: string; name: string; kind: string; face: RackFace}>;
   expectedFingerprint: string;
+}
+
+export interface RoomFloorplanMarker {
+  id: string;
+  roomId: string;
+  deviceId: string | null;
+  rackId: string | null;
+  x: number;
+  y: number;
+  label: string | null;
+  name: string;
+  updatedAt: string;
+}
+export interface RoomFloorplan {
+  roomId: string;
+  backgroundImageId: string | null;
+  revision: number;
+  updatedAt: string | null;
+  background: ReferenceImage | null;
+  markers: RoomFloorplanMarker[];
+}
+
+export interface ExternalHealthView {
+  warnings?:string[];
+  sourceIdentity: string; pollingEnabled: boolean; intervalSeconds: number;
+  lastCheckedAt: string | null; error: string | null;
+  readings: Array<{providerRecordId:string;recordName:string;key:string;label:string;value:string|number|boolean|null;unit:string|null;health:string;reportedHealth:string;observedAt:string;stale:boolean;collectionError:string|null}>;
+  bindings: Array<{id:string;providerRecordId:string;deviceId:string;sourceIdentity:string}>;
+  monitors: Array<DeviceMonitor & {bindingId:string|null;readingKey:string;alertOnDegraded:boolean}>;
 }

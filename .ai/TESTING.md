@@ -22,7 +22,7 @@ work. Never translate an unrun check into a pass.
 | Env/Compose/Docker | `check:config`, Compose rendering when Docker exists, privilege/data review |
 | Proxmox native LXC | `check:proxmox`, Bash syntax, ShellCheck, metadata/config parity, privilege and rollback review; real PVE guest tests before release |
 | Bundle/lazy loading | `build`, then `check:bundle` |
-| Glob/minimatch dependencies | `check:dependencies`, lint/lint proof, type checks and full build; production static serving verified by image smoke |
+| Glob/minimatch dependencies | `check:dependencies`, lint/lint proof, type checks and full build. Image smoke verifies production static serving. |
 | AI docs/commands | `check:docs` fixture/contract tests and direct semantic review |
 | Documentation screenshot harness | `screenshots:check`; review any intentional documentation asset updates separately |
 | Beta/main release | `check:full`, `screenshots:check`, shell and PowerShell syntax checks, Compose render, container smoke |
@@ -38,19 +38,51 @@ Quality runs `check:codeql-review` before dependency installation to verify the
 actual committed server tree against the independently reviewed SNMP exception.
 Run it after committing server changes; working server edits intentionally fail.
 
+The standard gate includes `check:dependencies`, which resolves glob matchers
+through their actual runtime and development consumers. It checks cancellation
+stops filesystem traversal, excessive globstar-parent expansion is rejected,
+ordinary file matching and partial traversal remain compatible, and TypeScript's
+optional project-service allowlist still accepts and rejects the intended files.
+
 Quality also runs `test:e2e:acceptance` in Chromium and Firefox with MCP enabled,
 and `test:docker:storage` on Linux to verify the production image's data-volume
 ownership, custom-user overrides and persistence using disposable resources.
 After image publication, `test:release:smoke` pulls the immutable build digest on
 both AMD64 and ARM64, checks its revision, exercises authenticated API writes,
 templates/member layouts and HTTP monitoring, and upgrades a disposable copy from
-the pinned schema-53 and immediately preceding stable schema-55 images. It verifies restart persistence and restores a
-separate pre-upgrade snapshot with the previous image. Both architecture jobs
-must pass before GitHub Release creation.
-Platform-specific image inspection requires Docker Engine/API 1.49 or newer,
-including when both architecture variants of an immutable digest are cached.
+the pinned stable and beta predecessors and historical schema-53 and schema-57
+images. It verifies restart persistence and restores a separate pre-upgrade
+snapshot with its matching image. Both architecture jobs must pass before
+GitHub Release creation.
+
+The AMD64 candidate job also runs real Mailpit and ntfy containers against the
+production API. It checks saved settings and restart persistence, STARTTLS and
+SMTPS delivery, SMTP authentication and certificate-hostname failures, ntfy
+HTTPS delivery and revoked tokens, and safe diagnostics. Services use an
+internal Docker bridge, disposable memory-backed volumes and a temporary trusted
+CA; no host ports or TLS bypass are used. This proves server-level interoperability, not
+delivery to a reporter's mailbox, mobile client or external provider account.
+Health candidates also run a pinned real Uptime Kuma service with an actual
+HTTP monitor and API key. Stopping its private target must change the collected
+status from healthy to unhealthy without replacing a binding. When Glances is
+implemented in the candidate, its real v4 Basic/JWT authentication, finite CPU
+and memory values, explicit bindings, rejected credentials and unavailable
+source are checked too. These services use private networking, non-root read-only
+containers and temporary memory-backed data. This checks container-level API
+interoperability; physical-host accuracy and provider HTTPS remain separate.
+
+Image smoke requires a Docker client/daemon supporting API 1.49+ for explicit
+platform-specific inspection when multiple baseline variants are cached locally.
 Candidate and published-image smoke jobs install current stable Docker with the
 containerd image store and fail a capability preflight before image work.
+
+Home Assistant candidates also exercise the built production collector directly
+against a pinned official container: real REST/WebSocket authentication, demo
+device grouping and rename identity, connectivity and unavailable transitions,
+numeric units and intentional-off semantics. Its setup client writes only to the
+disposable provider. This HTTP/WS test does not establish TLS, Rackpad route or
+credential-persistence behavior, MQTT/radio compatibility or hardware accuracy;
+those remain covered by their separate gates or real-installation acceptance.
 
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
@@ -62,6 +94,24 @@ database. The server suite already sets `DATABASE_PATH` under the OS temp
 directory; do not point tests at a working-tree or deployment database.
 
 Pull requests also build unpublished candidate images on AMD64 and ARM64 and
-verify fresh installs, actual stable schema-51/schema-55 and beta schema-53 upgrades,
-restart persistence and paired rollback. Candidate images are addressed by local
-immutable image IDs; previous images remain pinned GHCR digests.
+verify fresh installs, upgrades, restart persistence and paired rollback from
+the same image baselines, plus stable schema 51. The candidate image uses a
+local immutable image ID and each baseline uses a pinned GHCR digest.
+The smoke CLI also accepts schemas 58–62 up to the current schema, including
+equal-schema upgrades. Production API fixtures seed references from schema 59,
+floorplan images/markers from 60 and latest readings/bindings/disabled monitors
+from 61, plus supported provider credentials and options. Before publication,
+verify the predecessor pins and run upgrade, restart and paired rollback checks
+on both Linux architectures. Mocked orchestration tests verify workflow behavior.
+
+Standalone health regressions include `external-health*.test.ts`,
+`host-health.test.ts`, `power-health.test.ts`, `power-providers.test.ts` and
+`integration-options-migration.test.ts`, `home-assistant.test.ts` and
+`home-assistant-health.test.ts`; browser cases live in
+`e2e/standalone-features.spec.ts`. Protocol/API fixtures are synthetic and do not
+prove acceptance against user installations. New native transports also require
+independent review and clean Linux image/network acceptance before publication.
+Home Assistant fixtures cover registry denial, stable grouping, read-command
+allowlisting, frame/control bounds, cancellation, original-host TLS verification,
+explicit adoption, scoped access and encrypted recovery. They do not establish
+compatibility with a particular Home Assistant account or installation.

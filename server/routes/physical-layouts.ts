@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import { isStackType } from "../lib/device-stacks.js";
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
@@ -423,7 +424,7 @@ export const hardwareTemplatesRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { deviceType: string } }>(
     "/defaults/:deviceType",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "DeviceType", entityId: req.params.deviceType, action: "hardware-template.default.remove" }, () => {
       if (!assertGlobalAdmin(req, reply)) return;
       const deviceType = requiredDeviceType({
         deviceType: req.params.deviceType,
@@ -440,11 +441,11 @@ export const hardwareTemplatesRoutes: FastifyPluginAsync = async (app) => {
           summary: `Removed the hardware template override for ${deviceType}`,
         });
       }
-      return reply.status(204).send();
-    },
+      return result.changes > 0;
+    }),
   );
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "HardwareTemplate", entityId: req.params.id, action: "hardware-template.delete" }, () => {
     if (!assertGlobalAdmin(req, reply)) return;
     if (isReservedHardwareTemplateId(req.params.id)) {
       return reply
@@ -472,8 +473,8 @@ export const hardwareTemplatesRoutes: FastifyPluginAsync = async (app) => {
     const result = remove();
     if (result.changes === 0)
       return reply.status(404).send({ error: "Hardware template not found." });
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };
 
 export const physicalLayoutsRoutes: FastifyPluginAsync = async (app) => {

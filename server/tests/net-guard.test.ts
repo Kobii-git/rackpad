@@ -347,3 +347,20 @@ test("body requests reject transport timeout, size, abort, and response errors",
     setNetworkHostLookupForTests(null);
   }
 });
+
+test("an optional absolute deadline includes DNS and redirect time without resetting the network budget",async()=>{
+ const original=Date.now;let now=1000,calls=0;
+ Date.now=()=>now;
+ setNetworkHostLookupForTests(async()=>{now+=4000;return [{address:"192.168.1.50",family:4}];});
+ setPinnedRequestTransportForTests(async(_input,_resolved,options)=>{calls++;assert.equal(options.timeoutMs,6000);now+=3000;return {statusCode:302,location:"/next"};});
+ try{await assert.rejects(()=>requestPinnedUrlWithBody(new URL("https://deadline.example"),{timeoutMs:15000,deadlineMs:11000,sameOriginRedirects:true}),/timed out/);assert.equal(calls,1);}
+ finally{Date.now=original;setNetworkHostLookupForTests(null);setPinnedRequestTransportForTests(null);}
+});
+
+test("legacy short transport timeouts retain the independent five-second DNS budget",async context=>{
+ context.mock.timers.enable({apis:["setTimeout"]});
+ setNetworkHostLookupForTests(()=>new Promise(resolve=>{setTimeout(()=>resolve([{address:"192.168.1.50",family:4}]),2000);}));
+ setPinnedRequestTransportForTests(async(_input,_resolved,options)=>{assert.equal(options.timeoutMs,1000);return {statusCode:200,bodyText:"fixture"};});
+ try{const pending=requestPinnedUrlWithBody(new URL("https://legacy.example"),{timeoutMs:1000});context.mock.timers.tick(2000);assert.equal((await pending).statusCode,200);}
+ finally{context.mock.timers.reset();setNetworkHostLookupForTests(null);setPinnedRequestTransportForTests(null);}
+});
