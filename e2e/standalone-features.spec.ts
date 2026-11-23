@@ -539,7 +539,7 @@ test("standalone floorplan rejects concurrent edits and clears pending state on 
   await expect(
     page.getByText("No floorplan background selected.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /^Lab:/ }).click();
+  await page.getByRole("button", { name: /^Lab / }).click();
   await page
     .getByRole("button", { name: `${otherLab.name} use`, exact: true })
     .click();
@@ -558,7 +558,15 @@ test("standalone external health explicit bindings, monitor opt-in, stale displa
   await page.route(`**/api/integrations/connections/${connection.id}/**`,async route=>{
     const request=route.request(),suffix=new URL(request.url()).pathname.split(`${connection.id}/`)[1];
     const body=request.postDataJSON() ?? {};
-    if(suffix==="refresh" && fail){view.error="unavailable";for(const row of view.readings) row.health="unknown";await route.fulfill({status:502,json:{error:"Synthetic collection failure"}});return;}
+    if (suffix === "refresh" && fail) {
+      view.error = "unavailable";
+      for (const row of view.readings) {
+        row.health = "unknown";
+        row.collectionError = "unavailable";
+      }
+      await route.fulfill({ status: 502, json: { error: "Synthetic collection failure" } });
+      return;
+    }
     if(suffix==="bindings")view.bindings=[{id:"binding",deviceId:body.deviceId,providerRecordId:body.providerRecordId,sourceIdentity:view.sourceIdentity}];
     if(suffix==="external-monitors")view.monitors=[{id:"external-monitor",deviceId:device.id,name:"External health",type:"external",target:null,port:null,path:null,ignoreTlsErrors:false,enabled:false,intervalMs:60000,sortOrder:0,lastResult:null,lastCheckAt:null,lastMessage:null,lastAlertAt:null,bindingId:"binding",readingKey:"status",alertOnDegraded:false}];
     if(suffix==="external-monitors/external-monitor")Object.assign(view.monitors[0],body);
@@ -580,7 +588,9 @@ test("standalone external health explicit bindings, monitor opt-in, stale displa
   await page.getByRole("checkbox",{name:"Polling",exact:true}).check();await page.getByRole("button",{name:"Save",exact:true}).click();
   expect(view.pollingEnabled).toBe(true);
   fail=true;await page.getByRole("button",{name:"Refresh",exact:true}).click();
-  await expect(first.getByRole("cell",{name:"Unknown",exact:true})).toBeVisible();
+  await expect(first.getByRole("cell", { name: "Unknown Stale", exact: true })).toBeVisible();
+  await expect(first.getByRole("combobox", { name: "Device" })).toBeDisabled();
+  await expect(first.getByRole("button", { name: "Bind device" })).toBeDisabled();
   const last=page.getByRole("heading",{name:"Synthetic record 24",exact:true});await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();
   view.readings[0].stale=true;view.readings[0].collectionError=null;view.error=null;
   await page.clock.runFor(11000);await expect(first.getByRole("cell",{name:"Unknown Stale"})).toBeAttached();

@@ -358,7 +358,7 @@ test("audit history retries failed pages and ignores obsolete filter and lab res
     ).toBeVisible();
     await search.fill("lab-delay");
     await expect.poll(() => labSeen).toBe(true);
-    await page.getByRole("button", { name: /^Lab:/ }).click();
+    await page.getByRole("button", { name: /^Lab / }).click();
     await page.getByRole("button", { name: new RegExp(other.name) }).click();
     await expect(
       page.getByRole("cell", { name: "Other lab history", exact: true }),
