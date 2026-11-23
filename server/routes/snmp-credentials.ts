@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { requireAuth } from '../lib/auth.js'
 import {
@@ -121,7 +122,7 @@ export const snmpCredentialsRoutes: FastifyPluginAsync = async (app) => {
     return updated
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "SnmpCredential", entityId: req.params.id, action: "snmp.credential.delete" }, () => {
     if (!requireAuth(req, reply)) return
 
     const existing = getSnmpCredentialRow(req.params.id)
@@ -131,8 +132,8 @@ export const snmpCredentialsRoutes: FastifyPluginAsync = async (app) => {
     if (!assertLabWrite(req, reply, String(existing.labId))) return
 
     deleteSnmpCredential(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.post<{ Params: { id: string } }>('/:id/test', async (req, reply) => {
     if (!requireAuth(req, reply)) return

@@ -1,3 +1,4 @@
+import { backfillAuditScopes } from "./lib/audit-scope.js";
 import { encryptMonitorCommunity } from "./lib/security-migration.js";
 /**
  * Seed the database with the homelab mock dataset.
@@ -5233,7 +5234,7 @@ export function seedIfEmpty() {
     "INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt) VALUES (@issuer, @subject, @userId, @email, @displayName, @createdAt, @updatedAt)",
   );
   const insertAudit = db.prepare(
-    "INSERT INTO auditLog VALUES (@id, @ts, @user, @action, @entityType, @entityId, @summary)",
+    "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary) VALUES (@id, @ts, @user, @action, @entityType, @entityId, @summary)",
   );
 
   // Wrap everything in a transaction so seed is atomic
@@ -5394,6 +5395,7 @@ export function seedIfEmpty() {
   });
 
   seed();
+  db.transaction(() => backfillAuditScopes(db))();
   ensurePatchPanelPassThroughPorts();
   if (process.env.NODE_ENV !== "test") {
     console.log("[rackpad] Seed complete.");

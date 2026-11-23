@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import { execFile } from "node:child_process";
 import { reverse } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
@@ -1729,14 +1730,14 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>(
     "/schedules/:id",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "DiscoveryScanSchedule", entityId: req.params.id, action: "discovery.schedule.delete" }, () => {
       const existing = getDiscoveryScanScheduleRow(req.params.id);
       if (!assertLabWriteFromRow(req, reply, existing)) return;
       db.prepare("DELETE FROM discoveryScanSchedules WHERE id = ?").run(
         req.params.id,
       );
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 
   app.post("/scan", async (req, reply) => {
@@ -1913,13 +1914,13 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     return parseDiscoveredDevice(row);
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "DiscoveredDevice", entityId: req.params.id, action: "discovery.delete" }, () => {
     const existing = db
       .prepare("SELECT * FROM discoveredDevices WHERE id = ?")
       .get(req.params.id) as Record<string, unknown> | undefined;
     if (!assertLabWriteFromRow(req, reply, existing)) return;
 
     db.prepare("DELETE FROM discoveredDevices WHERE id = ?").run(req.params.id);
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };

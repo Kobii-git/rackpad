@@ -1,3 +1,7 @@
+import { assertSavedSecretCanBeReused, normalizeIntegrationBaseUrl } from "./connection-endpoint.js";
+export { normalizeIntegrationBaseUrl } from "./connection-endpoint.js";
+import { parseIntegrationOptions, type IntegrationConnectionOptions } from "./options.js";
+import { externalSourceIdentity, invalidateExternalConnection } from "./external-health.js";
 import { db } from "../../db.js";
 import { createId } from "../ids.js";
 import { decryptSecret, encryptOptionalSecret } from "../secret-crypto.js";
@@ -12,28 +16,6 @@ import {
   type IntegrationProvider,
 } from "./types.js";
 
-export function normalizeIntegrationBaseUrl(value: string) {
-  const trimmed = value.trim();
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    throw new ValidationError(
-      "Connection URL must be a valid http(s) URL, for example https://192.168.1.2:8443.",
-    );
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new ValidationError("Connection URL must use http or https.");
-  }
-  if (url.username || url.password) {
-    throw new ValidationError("Connection URL must not contain credentials.");
-  }
-  url.search = "";
-  url.hash = "";
-  let normalized = url.toString();
-  while (normalized.endsWith("/")) normalized = normalized.slice(0, -1);
-  return normalized;
-}
 
 function parseSummary(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "string" || !value) return null;
@@ -82,6 +64,11 @@ export function parseIntegrationConnectionPublic(
   row: Record<string, unknown>,
 ): IntegrationConnectionPublic {
   return {
+    options: parseIntegrationOptions(row.options,String(row.provider)),
+    healthPollingEnabled: Boolean(row.healthPollingEnabled),
+    healthIntervalSeconds: Number(row.healthIntervalSeconds ?? 60),
+    healthLastCheckedAt: row.healthLastCheckedAt ? String(row.healthLastCheckedAt) : null,
+    healthLastError: row.healthLastError ? String(row.healthLastError) : null,
     id: String(row.id),
     labId: String(row.labId),
     provider: String(row.provider) as IntegrationProvider,
@@ -162,8 +149,15 @@ export function loadIntegrationConnectionSecrets(
       403,
     );
   }
+  return parseIntegrationConnectionSecrets(row);
+}
 
+export function parseIntegrationConnectionSecrets(
+  row: Record<string, unknown>,
+  authSecretOverride?: string,
+): IntegrationConnectionSecrets {
   return {
+    options: parseIntegrationOptions(row.options,String(row.provider)),
     id: String(row.id),
     labId: String(row.labId),
     provider: String(row.provider) as IntegrationProvider,
@@ -171,9 +165,8 @@ export function loadIntegrationConnectionSecrets(
     baseUrl: String(row.baseUrl),
     authKind: String(row.authKind) as IntegrationAuthKind,
     authId: row.authId ? String(row.authId) : null,
-    authSecret: row.authSecretEnc
-      ? decryptSecret(String(row.authSecretEnc))
-      : null,
+    authSecret: row.authKind === "anonymous" ? null :
+      authSecretOverride ?? (row.authSecretEnc ? decryptSecret(String(row.authSecretEnc)) : null),
     siteRef: row.siteRef ? String(row.siteRef) : null,
     scopeRefs: parseLabIds(row.scopeRefs),
     verifyTls: Boolean(row.verifyTls),
@@ -209,7 +202,8 @@ function assertProviderAuthKind(
   }
 }
 
-export function createIntegrationConnection(input: {
+function createIntegrationConnectionTransaction(input: {
+  options?: IntegrationConnectionOptions;
   labId: string;
   provider: IntegrationProvider;
   name: string;
@@ -232,7 +226,7 @@ export function createIntegrationConnection(input: {
   syncWifi?: boolean;
 }) {
   assertProviderAuthKind(input.provider, input.authKind);
-  const baseUrl = normalizeIntegrationBaseUrl(input.baseUrl);
+  const baseUrl = normalizeIntegrationBaseUrl(input.baseUrl,input.provider);
   const now = new Date().toISOString();
   const id = createId("intg");
   db.prepare(
@@ -251,8 +245,8 @@ export function createIntegrationConnection(input: {
     input.name.trim(),
     baseUrl,
     input.authKind,
-    input.authId?.trim() || null,
-    encryptOptionalSecret(input.authSecret),
+    input.authKind === "anonymous" ? null : input.authId?.trim() || null,
+    input.authKind === "anonymous" ? null : encryptOptionalSecret(input.authSecret),
     input.siteRef?.trim() || null,
     input.scopeRefs && input.scopeRefs.length > 0
       ? JSON.stringify([...new Set(input.scopeRefs.filter(Boolean))])
@@ -271,14 +265,16 @@ export function createIntegrationConnection(input: {
     now,
     now,
   );
+  db.prepare("UPDATE integrationConnections SET options=? WHERE id=?").run(JSON.stringify(parseIntegrationOptions(input.options,input.provider)),id);
   return parseIntegrationConnectionPublic(getIntegrationConnectionRow(id)!);
 }
 
-export function updateIntegrationConnection(
+function updateIntegrationConnectionTransaction(
   id: string,
   input: Partial<{
     name: string;
     baseUrl: string;
+    options: IntegrationConnectionOptions;
     authKind: IntegrationAuthKind;
     authId: string | null;
     authSecret: string | null;
@@ -313,13 +309,35 @@ export function updateIntegrationConnection(
   const nextName = input.name?.trim() ?? String(existing.name);
   const nextBaseUrl =
     input.baseUrl !== undefined
-      ? normalizeIntegrationBaseUrl(input.baseUrl)
+      ? normalizeIntegrationBaseUrl(input.baseUrl,provider)
       : String(existing.baseUrl);
-  const nextAuthId =
+  const currentOptions = parseIntegrationOptions(existing.options, provider);
+  const nextOptions = input.options === undefined
+    ? currentOptions
+    : parseIntegrationOptions(input.options, provider);
+  const currentVerifyTls = Boolean(existing.verifyTls);
+  const nextVerifyTls = input.verifyTls ?? currentVerifyTls;
+  if (
+    nextAuthKind !== "anonymous" &&
+    !input.clearSecret &&
+    input.authSecret === undefined &&
+    existing.authSecretEnc
+  ) {
+    assertSavedSecretCanBeReused(provider, {
+      baseUrl: String(existing.baseUrl),
+      verifyTls: currentVerifyTls,
+      options: currentOptions,
+    }, {
+      baseUrl: nextBaseUrl,
+      verifyTls: nextVerifyTls,
+      options: nextOptions,
+    });
+  }
+  const nextAuthId = nextAuthKind === "anonymous" ? null :
     input.authId !== undefined
       ? input.authId?.trim() || null
       : (existing.authId as string | null);
-  const nextSecret = input.clearSecret
+  const nextSecret = nextAuthKind === "anonymous" || input.clearSecret
     ? null
     : input.authSecret !== undefined
       ? encryptOptionalSecret(input.authSecret)
@@ -334,12 +352,6 @@ export function updateIntegrationConnection(
         ? JSON.stringify([...new Set(input.scopeRefs.filter(Boolean))])
         : null
       : ((existing.scopeRefs as string | null) ?? null);
-  const nextVerifyTls =
-    input.verifyTls !== undefined
-      ? input.verifyTls
-        ? 1
-        : 0
-      : (existing.verifyTls as number);
   const nextEnabled =
     input.enabled !== undefined
       ? input.enabled
@@ -463,7 +475,7 @@ export function updateIntegrationConnection(
     nextSecret,
     nextSiteRef,
     nextScopeRefs,
-    nextVerifyTls,
+    Number(nextVerifyTls),
     nextEnabled,
     nextSyncVlans,
     nextSyncSubnets,
@@ -484,7 +496,10 @@ export function updateIntegrationConnection(
     id,
   );
 
-  return parseIntegrationConnectionPublic(getIntegrationConnectionRow(id)!);
+  db.prepare("UPDATE integrationConnections SET options=? WHERE id=?").run(JSON.stringify(nextOptions),id);
+  const current = getIntegrationConnectionRow(id)!;
+  invalidateExternalConnection(id, externalSourceIdentity(existing) !== externalSourceIdentity(current));
+  return parseIntegrationConnectionPublic(current);
 }
 
 export function recordIntegrationAutoSyncResult(
@@ -518,6 +533,7 @@ export function recordIntegrationAutoSyncResult(
 export function deleteIntegrationConnection(id: string) {
   const existing = getIntegrationConnectionRow(id);
   if (!existing) return false;
+  invalidateExternalConnection(id);
   db.prepare("DELETE FROM integrationConnections WHERE id = ?").run(id);
   return true;
 }
@@ -547,4 +563,11 @@ export function recordIntegrationConnectionStatus(
   );
   const row = getIntegrationConnectionRow(id);
   return row ? parseIntegrationConnectionPublic(row) : null;
+}
+
+export function createIntegrationConnection(input: Parameters<typeof createIntegrationConnectionTransaction>[0]) {
+  return db.transaction(()=>createIntegrationConnectionTransaction(input))();
+}
+export function updateIntegrationConnection(...args: Parameters<typeof updateIntegrationConnectionTransaction>) {
+  return db.transaction(()=>updateIntegrationConnectionTransaction(...args))();
 }

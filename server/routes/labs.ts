@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import { requireAdmin } from "../lib/auth.js";
@@ -115,7 +116,7 @@ export const labsRoutes: FastifyPluginAsync = async (app) => {
     return db.prepare("SELECT * FROM labs WHERE id = ?").get(req.params.id);
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "Lab", entityId: req.params.id, action: "lab.delete" }, () => {
     if (!requireAdmin(req, reply)) return;
 
     const existing = db
@@ -143,6 +144,6 @@ export const labsRoutes: FastifyPluginAsync = async (app) => {
       ).run(req.params.id);
       db.prepare("DELETE FROM labs WHERE id = ?").run(req.params.id);
     })();
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };

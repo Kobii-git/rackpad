@@ -1,7 +1,10 @@
+import { probeObservations } from "./monitor-observations.js";
+import { externalMonitorResult } from "./integrations/external-health.js";
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { db } from '../db.js'
 import { sendMonitorTransitionAlert } from './alerts.js'
+import type { PendingAlertState } from './notification-state.js'
 import { requestPinnedUrl, resolveRoutableHost } from './net-guard.js'
 import { snmpGet, SNMP_VERSIONS, type SnmpVersion } from './snmp.js'
 import { resolveMonitorSnmpSession } from './snmp-session.js'
@@ -14,12 +17,12 @@ import {
   type SnmpMatchMode,
 } from './snmp-match.js'
 
-export const MONITOR_TYPES = ['none', 'icmp', 'tcp', 'http', 'https', 'snmp'] as const
+export const MONITOR_TYPES = ['none', 'icmp', 'tcp', 'http', 'https', 'snmp', 'external'] as const
 export type MonitorType = (typeof MONITOR_TYPES)[number]
 export { SNMP_VERSIONS, type SnmpVersion, SNMP_MATCH_MODES, type SnmpMatchMode }
 export type MonitorResult = { result: 'online' | 'offline' | 'unknown'; message: string }
 
-export interface DeviceMonitor {
+export interface DeviceMonitor extends PendingAlertState {
   id: string
   deviceId: string
   name: string
@@ -45,6 +48,10 @@ export interface DeviceMonitor {
   lastResult?: string | null
   lastMessage?: string | null
 }
+
+
+let nextObservation = 0
+export function invalidateMonitorObservations() { probeObservations.clear() }
 
 let intervalHandle: NodeJS.Timeout | null = null
 let spawnProbe = spawn
@@ -87,6 +94,9 @@ export function parseMonitor(row: Record<string, unknown>): DeviceMonitor {
     sortOrder: row.sortOrder == null ? 0 : Number(row.sortOrder),
     lastCheckAt: row.lastCheckAt ? String(row.lastCheckAt) : null,
     lastAlertAt: row.lastAlertAt ? String(row.lastAlertAt) : null,
+    pendingAlertKind: row.pendingAlertKind as PendingAlertState['pendingAlertKind'] ?? null,
+    pendingAlertAt: row.pendingAlertAt ? String(row.pendingAlertAt) : null,
+    lastAlertAttemptAt: row.lastAlertAttemptAt ? String(row.lastAlertAttemptAt) : null,
     lastResult: row.lastResult ? String(row.lastResult) : null,
     lastMessage: row.lastMessage ? String(row.lastMessage) : null,
   }
@@ -146,10 +156,17 @@ export async function runMonitorCheck(id: string) {
     throw new ValidationError('Monitor target is disabled.', 409)
   }
 
-  const checkedAt = new Date().toISOString()
-  const result = await executeCheck(monitor)
-  await persistMonitorResult(monitor, { checkedAt, ...result })
-  return parseMonitor(db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(id) as Record<string, unknown>)
+  const observation = ++nextObservation
+  probeObservations.set(id, observation)
+  try {
+    const checkedAt = new Date().toISOString()
+    const result = await executeCheck(monitor)
+    if (probeObservations.get(id) === observation) await persistMonitorResult(monitor, { checkedAt, ...result })
+    const latest = db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    return latest ? parseMonitor(latest) : null
+  } finally {
+    if (probeObservations.get(id) === observation) probeObservations.delete(id)
+  }
 }
 
 export async function runDeviceChecks(deviceId: string) {
@@ -166,6 +183,9 @@ async function persistMonitorResult(
   monitor: DeviceMonitor,
   payload: { checkedAt: string; result: 'online' | 'offline' | 'unknown'; message: string },
 ) {
+  const current = db.prepare('SELECT * FROM deviceMonitors WHERE id=?').get(monitor.id) as Record<string, unknown> | undefined
+  if (!current || current.lastCheckAt && String(current.lastCheckAt) > payload.checkedAt) return
+  const previous = parseMonitor(current)
   db.prepare(`
     UPDATE deviceMonitors
     SET lastCheckAt = ?, lastResult = ?, lastMessage = ?
@@ -185,7 +205,7 @@ async function persistMonitorResult(
 
   refreshDeviceMonitorRollup(monitor.deviceId, currentDevice.status, payload.checkedAt)
 
-  await sendMonitorTransitionAlert(monitor.lastResult, monitor.lastAlertAt, {
+  await sendMonitorTransitionAlert(previous.lastResult, previous.lastAlertAt, {
     deviceId: monitor.deviceId,
     monitorId: monitor.id,
     hostname: currentDevice.hostname ?? monitor.deviceId,
@@ -210,6 +230,7 @@ export async function recordMonitorResult(
     | undefined
   if (!row) return null
 
+  probeObservations.delete(monitorId)
   const monitor = parseMonitor(row)
   const checkedAt = new Date().toISOString()
   await persistMonitorResult(monitor, { checkedAt, ...payload })
@@ -261,6 +282,7 @@ function refreshDeviceMonitorRollup(deviceId: string, currentStatus: string | un
 }
 
 async function executeCheck(monitor: DeviceMonitor) {
+  if (monitor.type === 'external') return externalMonitorResult(monitor.id);
   try {
     if (!monitor.target) {
       return { result: 'unknown' as const, message: 'No target configured.' }

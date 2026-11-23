@@ -86,7 +86,7 @@ test("integration providers are listed with their auth kinds", async () => {
   }>;
   assert.deepEqual(
     providers.map((entry) => entry.id),
-    ["proxmox", "unifi", "omada", "opnsense", "dockhand"],
+    ["proxmox", "unifi", "omada", "opnsense", "dockhand", "uptime-kuma", "glances", "patchmon", "nut", "redfish", "home-assistant"],
   );
   assert.deepEqual(
     providers.find((entry) => entry.id === "unifi")?.authKinds,
@@ -205,10 +205,9 @@ test("integration connection updates keep the stored secret unless replaced or c
 
   const renamed = await patchConnection(token, created.id, {
     name: "Edge firewall (primary)",
-    verifyTls: false,
   });
   assert.equal(renamed.name, "Edge firewall (primary)");
-  assert.equal(renamed.verifyTls, false);
+  assert.equal(renamed.verifyTls, true);
   assert.equal(renamed.hasSecret, true);
   assert.equal(
     loadIntegrationConnectionSecrets(created.id).authSecret,
@@ -1258,6 +1257,91 @@ test("discover-scopes tests credentials and lists scopes inline or by connection
     });
     assert.equal(stored.statusCode, 200, stored.body);
     assert.equal((json(stored) as { scopeKind: string }).scopeKind, "nodes");
+  } finally {
+    setIntegrationClientOverrideForTests("proxmox", null);
+  }
+});
+
+test("saved integration credentials stay bound to their endpoint and transport security", async () => {
+  const adminToken = await bootstrapAdmin();
+  const labId = await firstLabId(adminToken);
+  const created = await createConnection(adminToken, {
+    labId,
+    provider: "proxmox",
+    name: "Controller fixture",
+    baseUrl: "https://pve.lab.internal:8006/controller",
+    authKind: "api-token",
+    authId: "rackpad@pam!inventory",
+    authSecret: "synthetic-saved-credential",
+  });
+  const token = await createUserAndLogin(adminToken, {
+    username: "integration-editor",
+    displayName: "Integration editor",
+    password: "synthetic-editor-password",
+    role: "editor",
+    labAccess: [{ labId, role: "editor" }],
+  });
+  const discover = (payload: Record<string, unknown>) => app.inject({
+    method: "POST",
+    url: "/api/integrations/discover-scopes",
+    headers: authHeaders(token),
+    payload: { connectionId: created.id, ...payload },
+  });
+  const patch = (payload: Record<string, unknown>) => app.inject({
+    method: "PATCH",
+    url: `/api/integrations/connections/${created.id}`,
+    headers: authHeaders(token),
+    payload,
+  });
+  const testedCredentials: Array<string | null> = [];
+  setIntegrationClientOverrideForTests("proxmox", {
+    provider: "proxmox",
+    test: async (connection) => {
+      testedCredentials.push(connection.authSecret);
+      return { product: "Fixture", version: null, summary: {} };
+    },
+    fetchInventory: async () => { throw new Error("not used"); },
+  });
+  try {
+    for (const transport of [
+      { baseUrl: "https://different.lab.internal:8006/controller" },
+      { baseUrl: "https://pve.lab.internal:8006/another-controller" },
+      { verifyTls: false },
+    ]) {
+      for (const response of [await discover(transport), await patch(transport)]) {
+        assert.equal(response.statusCode, 400, response.body);
+        assert.equal(json(response).code, "INTEGRATION_CREDENTIAL_REQUIRED");
+      }
+    }
+    assert.equal(testedCredentials.length, 0);
+    const [unchanged] = await listConnections(token, labId);
+    assert.equal(unchanged.baseUrl, created.baseUrl);
+    assert.equal(unchanged.verifyTls, true);
+
+    const canonicalAlias = { baseUrl: "https://PVE.lab.internal:8006/controller/" };
+    assert.equal((await discover(canonicalAlias)).statusCode, 200);
+    assert.equal((await patch(canonicalAlias)).statusCode, 200);
+    assert.deepEqual(testedCredentials, ["synthetic-saved-credential"]);
+
+    const replacement = {
+      baseUrl: "https://replacement.lab.internal:8006/controller",
+      authSecret: "synthetic-replacement-credential",
+    };
+    db.prepare("UPDATE integrationConnections SET authSecretEnc = ? WHERE id = ?")
+      .run("unreadable-fixture-ciphertext", created.id);
+    assert.equal((await discover(replacement)).statusCode, 200);
+    assert.deepEqual(testedCredentials, ["synthetic-saved-credential", replacement.authSecret]);
+    assert.equal((await listConnections(token, labId))[0].baseUrl, created.baseUrl);
+    const saved = await patchConnection(token, created.id, replacement);
+    assert.equal(saved.baseUrl, replacement.baseUrl);
+    assert.equal(loadIntegrationConnectionSecrets(created.id).authSecret, replacement.authSecret);
+
+    const cleared = await patchConnection(token, created.id, {
+      baseUrl: created.baseUrl,
+      clearSecret: true,
+    });
+    assert.equal(cleared.baseUrl, created.baseUrl);
+    assert.equal(cleared.hasSecret, false);
   } finally {
     setIntegrationClientOverrideForTests("proxmox", null);
   }

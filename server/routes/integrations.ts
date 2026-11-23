@@ -1,3 +1,11 @@
+import { parseIntegrationOptions } from "../lib/integrations/options.js";
+import { assertSavedSecretCanBeReused } from "../lib/integrations/connection-endpoint.js";
+import { externalHealthWorkGeneration, beginExternalHealthWork } from "../lib/integrations/external-health-epoch.js";
+import { externalConfigurationRevision } from "../lib/integrations/external-health.js";
+import { canWriteLab, fetchUserLabAccess } from "../lib/lab-access.js";
+import { getPublicUserById } from "../lib/auth.js";
+import type { FastifyRequest } from "fastify";
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { db } from "../db.js";
 import { requireAdmin, requireAuth } from "../lib/auth.js";
@@ -15,6 +23,7 @@ import {
   loadIntegrationConnectionSecrets,
   normalizeIntegrationBaseUrl,
   parseIntegrationConnectionPublic,
+  parseIntegrationConnectionSecrets,
   recordIntegrationConnectionStatus,
   updateIntegrationConnection,
 } from "../lib/integrations/connections.js";
@@ -85,6 +94,19 @@ interface IntegrationDeviceSnapshot {
   selectableProviderRecordIds: string[];
 }
 
+function guardedHealthRequest(req: FastifyRequest, row: Record<string, unknown>) {
+  if (!INTEGRATION_PROVIDER_INFO[row.provider as IntegrationProvider].capabilities.health) return undefined;
+  const work = beginExternalHealthWork(String(row.id));
+  const revision = externalConfigurationRevision(row);
+  const isCurrent = () => {
+    const latest = getIntegrationConnectionRow(String(row.id));
+    const actor = getPublicUserById(req.authUser!.id);
+    return work.current() && Boolean(latest && latest.enabled && externalConfigurationRevision(latest) === revision && actor && !actor.disabled && canWriteLab(actor, String(latest.labId), fetchUserLabAccess(actor.id)));
+  };
+  const assertCurrent = () => { if (!isCurrent()) throw new ValidationError("The connection or access changed. Retry the request.", 409, "EXTERNAL_REQUEST_OBSOLETE"); };
+  return { isCurrent, assertCurrent, finish: work.finish };
+}
+
 function validateConnectionAuth(
   provider: IntegrationProvider,
   authKind: IntegrationAuthKind,
@@ -93,7 +115,7 @@ function validateConnectionAuth(
 ) {
   // API keys are a single secret; every other auth kind pairs the secret
   // with an identifier (username, token id, client id, or key id).
-  const needsAuthId = authKind !== "api-key";
+  const needsAuthId = authKind !== "api-key" && authKind !== "anonymous";
   if (!partial && needsAuthId && !authId?.trim()) {
     throw new ValidationError(
       `authId is required for ${INTEGRATION_PROVIDER_INFO[provider].label} connections.`,
@@ -137,10 +159,6 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/connections", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (!canEncryptSecrets()) {
-      return reply.status(503).send({ error: SECRET_KEY_REQUIRED_MESSAGE });
-    }
-
     const body = asObject(req.body);
     const labId = requiredString(body, "labId", { maxLength: 80 });
     if (!assertLabWrite(req, reply, labId)) return;
@@ -150,12 +168,14 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       optionalEnum(body, "authKind", INTEGRATION_AUTH_KINDS) ??
       INTEGRATION_PROVIDER_INFO[provider].defaultAuthKind;
     const authId = optionalString(body, "authId", { maxLength: 200 }) ?? null;
-    const authSecret = requiredString(body, "authSecret", { maxLength: 500 });
+    if (authKind !== "anonymous" && !canEncryptSecrets()) return reply.status(503).send({ error: SECRET_KEY_REQUIRED_MESSAGE });
+    const authSecret = authKind === "anonymous" ? null : requiredString(body, "authSecret", { maxLength: 500 });
     validateConnectionAuth(provider, authKind, authId);
 
     const created = createIntegrationConnection({
       labId,
       provider,
+      options:parseIntegrationOptions(body.options,provider),
       name: requiredString(body, "name", { maxLength: 120 }),
       baseUrl: requiredString(body, "baseUrl", { maxLength: 500 }),
       authKind,
@@ -201,11 +221,24 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: "Integration connection not found." });
       }
       if (!assertLabWrite(req, reply, String(existing.labId))) return;
-      secrets = loadIntegrationConnectionSecrets(connectionId);
+      const current = parseIntegrationConnectionPublic(existing);
+      const verifyTls = optionalBoolean(body, "verifyTls");
+      const next = {
+        baseUrl: body.baseUrl === undefined
+          ? current.baseUrl
+          : normalizeIntegrationBaseUrl(requiredString(body, "baseUrl", { maxLength: 500 }), current.provider),
+        verifyTls: verifyTls === undefined ? current.verifyTls : verifyTls ?? true,
+        options: body.options === undefined
+          ? current.options
+          : parseIntegrationOptions(body.options, current.provider),
+      };
       const inlineSecret = optionalString(body, "authSecret", {
         maxLength: 500,
       });
-      if (inlineSecret) secrets = { ...secrets, authSecret: inlineSecret };
+      if (current.hasSecret && !inlineSecret) {
+        assertSavedSecretCanBeReused(current.provider, current, next);
+      }
+      secrets = { ...parseIntegrationConnectionSecrets(existing, inlineSecret ?? undefined), ...next };
       const inlineAuthId = optionalString(body, "authId", { maxLength: 200 });
       if (inlineAuthId !== undefined) {
         secrets = { ...secrets, authId: inlineAuthId };
@@ -218,16 +251,17 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         optionalEnum(body, "authKind", INTEGRATION_AUTH_KINDS) ??
         INTEGRATION_PROVIDER_INFO[provider].defaultAuthKind;
       secrets = {
+        options:parseIntegrationOptions(body.options,provider),
         id: "discover",
         labId,
         provider,
         name: "discover",
         baseUrl: normalizeIntegrationBaseUrl(
-          requiredString(body, "baseUrl", { maxLength: 500 }),
+          requiredString(body, "baseUrl", { maxLength: 500 }),provider,
         ),
         authKind,
         authId: optionalString(body, "authId", { maxLength: 200 }) ?? null,
-        authSecret: requiredString(body, "authSecret", { maxLength: 500 }),
+        authSecret: authKind === "anonymous" ? null : requiredString(body, "authSecret", { maxLength: 500 }),
         siteRef: null,
         scopeRefs: [],
         verifyTls: optionalBoolean(body, "verifyTls") ?? true,
@@ -256,26 +290,36 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         error: `The ${INTEGRATION_PROVIDER_INFO[secrets.provider].label} client is not available in this build.`,
       });
     }
-    if (!secrets.authSecret) {
+    if (secrets.authKind !== "anonymous" && !secrets.authSecret) {
       return reply.status(400).send({
         error:
           "This connection has no stored secret. Enter the credential again first.",
       });
     }
 
+    const generation = externalHealthWorkGeneration();
+    const work = connectionId ? guardedHealthRequest(req, getIntegrationConnectionRow(connectionId)!) : undefined;
+    const current = () => {
+      const actor = getPublicUserById(req.authUser!.id);
+      return generation === externalHealthWorkGeneration() && (!work || work.isCurrent()) && Boolean(actor && !actor.disabled && canWriteLab(actor,secrets.labId,fetchUserLabAccess(actor.id)));
+    };
+    const assertCurrent = () => { if (!current()) throw new ValidationError("The connection or access changed. Retry the request.",409,"EXTERNAL_REQUEST_OBSOLETE"); };
     try {
-      const result = await client.test(secrets);
+      const result = await client.test(secrets, {isCurrent:current});
+      assertCurrent();
       const scopes = client.listScopes ? await client.listScopes(secrets) : [];
+      assertCurrent();
       return {
         result,
         scopeKind: INTEGRATION_PROVIDER_INFO[secrets.provider].scopeKind,
         scopes,
       };
     } catch (error) {
+      assertCurrent();
       const message =
         error instanceof Error ? error.message : "Connection test failed.";
       return reply.status(502).send({ error: message });
-    }
+    } finally { work?.finish(); }
   });
 
   app.patch<{ Params: { id: string } }>(
@@ -308,6 +352,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       );
 
       const updated = updateIntegrationConnection(req.params.id, {
+        options: body.options === undefined ? undefined : parseIntegrationOptions(body.options,provider),
         name: optionalString(body, "name", { maxLength: 120 }) ?? undefined,
         baseUrl:
           optionalString(body, "baseUrl", { maxLength: 500 }) ?? undefined,
@@ -345,7 +390,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>(
     "/connections/:id",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "IntegrationConnection", entityId: req.params.id, action: "integration.connection.delete" }, () => {
       if (!requireAuth(req, reply)) return;
 
       const existing = getIntegrationConnectionRow(req.params.id);
@@ -357,8 +402,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertLabWrite(req, reply, String(existing.labId))) return;
 
       deleteIntegrationConnection(req.params.id);
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 
   app.post<{ Params: { id: string } }>(
@@ -383,15 +428,17 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const connection = loadIntegrationConnectionSecrets(req.params.id);
-      if (!connection.authSecret) {
+      if (connection.authKind !== "anonymous" && !connection.authSecret) {
         return reply.status(400).send({
           error:
             "This connection has no stored secret. Enter the credential again before testing.",
         });
       }
 
+      const work = guardedHealthRequest(req, existing);
       try {
-        const result = await client.test(connection);
+        const result = await client.test(connection, work);
+        work?.assertCurrent();
         const updated = recordIntegrationConnectionStatus(req.params.id, {
           status: "ok",
           error: null,
@@ -403,6 +450,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         });
         return { connection: updated, result };
       } catch (error) {
+        work?.assertCurrent();
         const message =
           error instanceof Error ? error.message : "Connection test failed.";
         const updated = recordIntegrationConnectionStatus(req.params.id, {
@@ -410,7 +458,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           error: message,
         });
         return reply.status(502).send({ error: message, connection: updated });
-      }
+      } finally { work?.finish(); }
     },
   );
 
@@ -453,15 +501,17 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       const policy = mode === "merge" ? "merge" : "mirror";
 
       const connection = loadIntegrationConnectionSecrets(req.params.id);
-      if (!connection.authSecret) {
+      if (connection.authKind !== "anonymous" && !connection.authSecret) {
         return reply.status(400).send({
           error:
             "This connection has no stored secret. Enter the credential again before pulling inventory.",
         });
       }
 
+      const work = guardedHealthRequest(req, existing);
       try {
-        const inventory = await client.fetchInventory(connection);
+        const inventory = await client.fetchInventory(connection, work);
+        work?.assertCurrent();
         const preview = buildIntegrationNetworkPreview({
           connection,
           collection: inventory.collection,
@@ -486,6 +536,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           sanitizeImportableDevices(
             inventory.importableDevices ?? [],
             sanitizationWarnings,
+            INTEGRATION_PROVIDER_INFO[connection.provider].capabilities.health,
           ),
         );
         const wifi = connection.syncWifi
@@ -498,6 +549,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           inventory.virtualSwitches ?? [],
         );
         const deviceSync = buildIntegrationDeviceSyncPlan({
+          connectionId: INTEGRATION_PROVIDER_INFO[connection.provider].capabilities.health ? connection.id : undefined,
           labId: connection.labId,
           importableDevices,
           wifi,
@@ -546,6 +598,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           warnings: [...inventory.warnings, ...sanitizationWarnings],
         };
       } catch (error) {
+        work?.assertCurrent();
         const message =
           error instanceof Error ? error.message : "Inventory pull failed.";
         const updated = recordIntegrationConnectionStatus(req.params.id, {
@@ -553,7 +606,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           error: message,
         });
         return reply.status(502).send({ error: message, connection: updated });
-      }
+      } finally { work?.finish(); }
     },
   );
 
@@ -676,6 +729,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!assertLabWrite(req, reply, String(connection.labId))) return;
 
+    if (INTEGRATION_PROVIDER_INFO[String(connection.provider) as IntegrationProvider].capabilities.health) throw new ValidationError("External health providers require explicit inventory adoption; automatic sync is unavailable.");
     const cron = requiredString(body, "cron", { maxLength: 120 });
     const labIds = optionalStringArray(body, "labIds", { maxItems: 50 }) ?? [];
     if (!validateScheduleInput(reply, cron, labIds)) return;
@@ -720,7 +774,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>(
     "/schedules/:id",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "IntegrationSyncSchedule", entityId: req.params.id, action: "integration.schedule.delete" }, () => {
       if (!requireAdmin(req, reply)) return;
       const existing = getIntegrationSyncScheduleRow(req.params.id);
       const connection = scheduleConnection(existing);
@@ -729,8 +783,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertLabWrite(req, reply, String(connection.labId))) return;
       deleteIntegrationSyncSchedule(req.params.id);
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 
   app.post<{ Params: { id: string } }>(
@@ -844,6 +898,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
         const provider = String(existing.provider) as IntegrationProvider;
         return applyIntegrationDeviceSync({
+          bindingConnectionId: INTEGRATION_PROVIDER_INFO[provider].capabilities.health ? req.params.id : undefined,
           labId: String(existing.labId),
           importableDevices: snapshot.importableDevices,
           wifi,

@@ -49,6 +49,13 @@ restore when the same `RACKPAD_SECRET_KEY` is retained.
 
 ## Migration rule
 
+Physical faces also accept optional `skin` (`graphite`, `silver`, `ivory`) and
+`rotation` (0/90/180/270). They are validated schema-v1 JSON metadata carried by
+templates, device/member snapshots, portable templates and recovery. Missing
+fields retain theme colors and zero rotation. Rotation changes presentation and
+port anchors inside existing placement geometry; it never reallocates rack U or
+columns. Older binaries may discard this metadata when rewriting layouts.
+
 Append a new entry to `SCHEMA_MIGRATIONS` in `server/db.ts` and increment
 `CURRENT_SCHEMA_VERSION` in `server/schema-version.ts`; never edit an applied
 entry. Test supported legacy upgrade paths and failure atomicity. A new table or
@@ -59,8 +66,9 @@ schema-coverage decisions.
 
 `server/routes/admin.ts` exports `rackpad-backup-v1` with app and schema versions.
 Every application table must appear under `data` or be on the test’s short,
-commented exclusion list. Only `schemaVersion` metadata and ephemeral
-`userSessions` are excluded. Sessions are deliberately invalidated on restore.
+commented exclusion list. `schemaVersion` metadata, ephemeral `userSessions`
+and personal `mcpTokens` are excluded. Sessions and MCP tokens are deliberately
+invalidated on restore.
 
 Restore validates format/integrity, rejects snapshots from a newer schema,
 deletes and re-inserts inside one transaction, restores `userLabAccess` only
@@ -159,3 +167,69 @@ Older logical backups default missing fields safely, and genuine schema-50–54
 native snapshots remain accepted for startup migration. The settings do not
 change physical layout snapshots, device geometry, ports, or cable anchors.
 Rollback requires the prior image with its paired pre-upgrade database.
+
+Schema 56 adds nullable `deviceServices.networkPort` (integer 1–65535) and
+`transportProtocol` (`tcp`/`udp`). Both are null when no network port is recorded.
+These document a service endpoint independently of the physical `portId`; they
+do not create monitoring or listeners. Logical restore accepts older rows without
+these fields and validates new endpoints before replacement. Native validation
+checks endpoint integrity and rejects pre-56 markers with the new columns.
+Rollback requires the previous image and its matching pre-upgrade database.
+
+
+Schema 57 adds `deviceMonitors.pendingAlertKind`, `pendingAlertAt` and
+`lastAlertAttemptAt`. Kind/time are paired, and attempt time belongs only to a
+pending event. Migration initializes all three to null. Logical/native recovery
+validates and preserves the state; older backups default it to empty. Any channel
+success clears the event and advances `lastAlertAt`; total failure retains it.
+New transitions supersede it, unknown observations defer it, and category changes
+clear inapplicable events. No historical pending event is inferred at upgrade.
+
+Alert settings include an ntfy topic URL and encrypted `ntfyTokenEnc`.
+Administration accepts an omitted/preserve, null/clear or nonempty/replace
+write-only `ntfyToken`, returning only `ntfyTokenConfigured`. Portable export and
+restore redact ntfy credential fields. Native backups retain ciphertext requiring
+the same `RACKPAD_SECRET_KEY`; other notification credential import semantics stay
+compatible.
+
+Schema 58 adds nullable JSON `auditLog.labIds` and an entity-history index. Scope
+is captured by server audit writers and remains independent of later inventory
+moves/deletion. The migration backfills history whose entities still resolve;
+already-deleted or unknown subjects remain unscoped and admin-only. Deletion
+handlers use synchronous transactions which capture the subject's scope before
+cascading writes and commit the deletion event with the mutation. Previously
+stored descendant scopes survive unchanged; unknown scopes are never reassigned
+when an entity ID is reused.
+Logical/native recovery validates and retains scope, including deleted lab IDs;
+older logical snapshots backfill only resolvable subjects. Rollback requires the
+previous binary/image with its paired pre-upgrade database snapshot.
+
+Schema 59 adds nullable unique `publicReference` fields to devices and cables.
+Explicit assignment uses 80 random bits with Bech32m and rpd/rpc prefixes;
+references are immutable, do not replace primary keys, and are not backfilled.
+Authenticated lookup checks all current subject lab grants. Logical/native
+recovery validate canonical type/checksum/uniqueness; assignment/deletion audits
+retain the reference. Rollback needs the pre-upgrade database/configuration/key.
+
+Schema 60 adds `roomFloorplans` and `roomFloorplanMarkers`, independent of Rack
+Studio and inventory geometry. Explicit backgrounds reference room images;
+normalized markers reference one room-owned rack or device. Whole-room revisions
+reject stale writes. Inventory room moves/deletion transactionally prune invalid
+markers and advance the revision. Background deletion clears the selection while
+preserving markers. Logical/native recovery validates ownership and coordinates;
+rollback requires the preceding binary and paired pre-upgrade snapshot.
+
+Schema 61 adds four `integrationConnections` health polling/status fields,
+`integrationRecordBindings`, `integrationLatestReadings` and
+`externalMonitorMappings`. Latest values are bounded to 10,000 per connection;
+there is no telemetry history. Stable provider identities bind explicitly to
+same-lab inventory. Deletion, rebinding or lab movement disables and detaches
+invalid external monitor mappings transactionally. Recovery validates scalar
+readings, capabilities, ownership, mapping types and uniqueness before replacing
+data, and marks restored readings refresh-required. Missing legacy fields default
+to disabled polling (60-second interval) and empty new tables.
+
+Schema 62 appends `integrationConnections.options`, a JSON object defaulting to
+`{}`. Only NUT accepts `allowUnencrypted` (boolean); all other option keys/providers
+are rejected in routes and recovery. Option changes invalidate outstanding health
+and preview completions. Genuine schema-61 snapshots remain valid for migration.

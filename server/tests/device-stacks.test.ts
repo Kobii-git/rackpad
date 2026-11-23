@@ -733,7 +733,7 @@ test("schema50 upgrades without changing existing ports and old logical backups 
   );
   const database = new Database(legacy);
   database.exec(
-    `ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    `ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1010,7 +1010,7 @@ test("schema51 and schema53 upgrades preserve populated stacks, ports and cables
     const filename = path.join(directory, `release-upgrade-${version}.db`);
     await db.backup(filename);
     const legacy = new Database(filename);
-    legacy.exec("ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts");
+    legacy.exec("ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts");
     if (version === 51) {
       legacy.exec(`
         DROP TABLE mcpTokens;
@@ -1047,13 +1047,56 @@ test("schema51 and schema53 upgrades preserve populated stacks, ports and cables
 test("schema54 migration is forward-only and rolls back its table when the version update fails",async()=>{
   for(const fail of [false,true]){
     const filename=path.join(directory,`member-migration-${fail}.db`);await db.backup(filename);const legacy=new Database(filename);
-    legacy.exec("ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts; UPDATE schemaVersion SET version=53");
+    legacy.exec("ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts; UPDATE schemaVersion SET version=53");
     if(fail)legacy.exec("CREATE TRIGGER fail_schema54 BEFORE UPDATE ON schemaVersion WHEN NEW.version=54 BEGIN SELECT RAISE(ABORT,'fixture migration failure'); END");
     legacy.close();
     const run=()=>execFileSync(process.execPath,["--import","tsx","--input-type=module","-e","await import('./server/db.ts');"],{cwd:process.cwd(),env:{...process.env,DATABASE_PATH:filename},stdio:"pipe"});
     if(fail)assert.throws(run);else run();
     const result=new Database(filename);try {assert.equal((result.prepare("SELECT version FROM schemaVersion").get() as {version:number}).version,fail?53:CURRENT_SCHEMA_VERSION);assert.equal(!!result.prepare("SELECT name FROM sqlite_master WHERE name='deviceStackMemberLayouts'").get(),!fail);}finally{result.close();}
   }
+});
+
+test("rotated member artwork regenerates after initialization and logical/native recovery without persisting projections", async () => {
+  const {createStarterTemplate} = await import("../../src/lib/hardware-template-builder.ts");
+  const {initializeDevicePhysicalLayout} = await import("../lib/device-physical-layout.js");
+  const stack = await device("rotated-artwork-stack");
+  const m = await member(stack.id, "Rotated member", {heightU:2});
+  const template = createStarterTemplate("switch-24", "rotated-artwork-template", "Rotated artwork");
+  template.portSlots = []; template.modules = []; template.moduleSlots = [];
+  template.front.height = 200; template.front.rotation = 90; template.front.skin = "silver";
+  template.front.elements = [{kind:"vent",id:"vent",x:10,y:20,width:100,height:40}];
+  assert.equal((await call("POST", "/api/hardware-templates", template)).statusCode, 201);
+  const url = `/api/devices/${stack.id}/stack-members/${m.id}/physical-layout`;
+  const previewResponse = await call("POST", `${url}/preview`, {templateId:template.id});
+  assert.equal(previewResponse.statusCode, 200, previewResponse.body);
+  const applied = await call("POST", `${url}/apply`, previewResponse.json());
+  assert.equal(applied.statusCode, 200, applied.body);
+  const effective = async () => (await call("GET", `/api/physical-layouts/${stack.id}`)).json().snapshot;
+  const before = await effective();
+  const vent = before.faces.front.elements.find((element:{kind:string}) => element.kind === "vent");
+  assert.deepEqual(vent.projection.matrix, [0,0.2,-5,0,1000,0]);
+  assert.equal((await call("POST", `/api/physical-layouts/${stack.id}/preview`, {customSnapshot:before})).statusCode, 409);
+  db.prepare("DELETE FROM devicePhysicalLayouts WHERE deviceId=?").run(stack.id);
+  const initialized = initializeDevicePhysicalLayout(stack.id)!;
+  assert.doesNotMatch(initialized.snapshot, /"projection"/);
+  validateResolvedPhysicalLayoutV1(JSON.parse(initialized.snapshot));
+  assert.deepEqual((await effective()).faces.front.elements, before.faces.front.elements);
+  const backup = (await call("GET", "/api/admin/export")).json();
+  const stored = backup.data.deviceStackMemberLayouts.find((row:{memberId:string}) => row.memberId === m.id);
+  assert.equal(stored.snapshot.faces.front.rotation, 90);
+  assert.doesNotMatch(JSON.stringify(stored.snapshot), /"projection"/);
+  const corrupt = structuredClone(backup);
+  corrupt.data.deviceStackMemberLayouts.find((row:{memberId:string}) => row.memberId === m.id).snapshot.faces.front.elements[0].projection = vent.projection;
+  assert.equal((await call("POST", "/api/admin/restore", corrupt)).statusCode, 422);
+  assert.deepEqual((await effective()).faces.front.elements, before.faces.front.elements);
+  const nativePath = path.join(directory, "rotated-artwork-native.db");
+  await db.backup(nativePath);
+  const native = new Database(nativePath);
+  try { assert.equal(validateRackpadSqliteDatabase(native, "Rotated member artwork"), CURRENT_SCHEMA_VERSION); }
+  finally { native.close(); }
+  assert.equal((await call("POST", "/api/admin/restore", backup)).statusCode, 200);
+  token = (await call("POST", "/api/auth/login", {username:"admin",password:"stack-test-password"})).json().token;
+  assert.deepEqual((await effective()).faces.front.elements, before.faces.front.elements);
 });
 
 test("quarter-turn member slots preserve their scaled center and stay inside the member footprint", async()=>{

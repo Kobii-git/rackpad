@@ -87,6 +87,7 @@ async function runIntegrationSyncScheduleUnlocked(
   const client = getIntegrationClient(connection.provider);
 
   try {
+    if (INTEGRATION_PROVIDER_INFO[connection.provider].capabilities.health) throw new ValidationError("External health providers require explicit inventory adoption; automatic sync is unavailable.");
     if (!client) {
       throw new Error("No client is available for this provider.");
     }

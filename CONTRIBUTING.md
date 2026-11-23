@@ -13,7 +13,9 @@ This guide covers maintainer setup, branching, validation and release work.
 
 ## Development setup
 
-1. **Requirements:** Node.js 22.x (see `package.json` engines).
+1. **Requirements:** Node.js 22.x (see `package.json` engines). Use 22.12 or
+   newer within Node 22 for development: the Axe accessibility test tooling
+   requires at least 22.12. The application runtime remains Node 22.
 2. **Install dependencies:**
    ```bash
    npm install

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { exerciseApi } from "./fixtures/release-image-api.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -492,26 +493,66 @@ test("pre-merge smoke builds unpublished immutable candidates and tests stable a
   assert.equal(build.with.labels, "org.opencontainers.image.revision=${{ github.sha }}");
   const smoke = job.steps.find(step => step.env?.CANDIDATE_IMAGE);
   assert.equal(smoke.env.CANDIDATE_IMAGE, "${{ steps.candidate.outputs.imageid }}");
-  for (const key of ["STABLE_IMAGE", "BETA_IMAGE", "PREVIOUS_STABLE_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
+  for (const key of ["STABLE_IMAGE", "BETA_IMAGE", "SCHEMA57_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
   assert(smoke.run.includes('--previous-image "$STABLE_IMAGE" --previous-schema 51'));
   assert(smoke.run.includes('--previous-image "$BETA_IMAGE" --previous-schema 53'));
-  assert(smoke.run.includes('--previous-image "$PREVIOUS_STABLE_IMAGE" --previous-schema 55'));
+  assert(smoke.run.includes('--previous-image "$SCHEMA57_IMAGE" --previous-schema 57'));
+  assert.equal(smoke.env.SCHEMA57_IMAGE, "ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5");
   assert(!job.steps.some(step => step.uses?.startsWith("docker/login-action")));
 });
 
+
+test("image checks retain the current stable and beta recovery baselines in both jobs", () => {
+  const version = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  const expectedSchema = {
+    "1.9.0-beta.0": "58",
+    "1.9.0-beta.1": "59",
+    "1.9.0-beta.2": "60",
+    "1.9.0-beta.3": "61",
+    "1.9.0-beta.4": "61",
+    "1.9.0-beta.5": "62",
+    "1.9.0-beta.6": "62",
+    "1.9.0-beta.7": "62",
+    "1.9.0": "62",
+  }[version];
+  assert.ok(expectedSchema, "review the published beta predecessor when preparing a new version");
+  const { jobs } = workflow("docker-publish");
+  let precedingImage;
+  for (const name of ["candidate-smoke", "smoke"]) {
+    const step = jobs[name].steps.find(item => item.env?.PRECEDING_RELEASE_IMAGE);
+    assert.ok(step, `${name} must exercise the immediate published release`);
+    assert.match(step.env.PRECEDING_RELEASE_IMAGE, /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
+    assert.equal(step.env.PRECEDING_RELEASE_SCHEMA, expectedSchema);
+    if (version === "1.9.0-beta.6") assert.equal(step.env.PRECEDING_RELEASE_IMAGE,
+      "ghcr.io/kobii-git/rackpad@sha256:5ed4b1ad6481e2d9113740fa176caeb029bfa74cc665309490af64ca4487ae02");
+    if (version === "1.9.0-beta.7") assert.equal(step.env.PRECEDING_RELEASE_IMAGE,
+      "ghcr.io/kobii-git/rackpad@sha256:2ec9251b0db8d63dcaa009a465fd879c9487989ff90b00489641f7f728fce1d5");
+    if (version === "1.9.0") {
+      assert.equal(step.env.PRECEDING_RELEASE_IMAGE,
+        "ghcr.io/kobii-git/rackpad@sha256:14982247fe0a5c65c32233003e670432ca6dbff131a5fa69e8810d33ee2375a5");
+      assert.equal(step.env.PREVIOUS_STABLE_IMAGE,
+        "ghcr.io/kobii-git/rackpad@sha256:c772ace14b832e0b855f92ede16bb79340d3a4edc6a3027c8ec6acb233cc6bec");
+      assert.ok(step.run.includes('--previous-image "$PREVIOUS_STABLE_IMAGE" --previous-schema 55'));
+    }
+    assert.ok(step.run.includes('--previous-image "$PRECEDING_RELEASE_IMAGE" --previous-schema "$PRECEDING_RELEASE_SCHEMA"'));
+    if (precedingImage) assert.equal(step.env.PRECEDING_RELEASE_IMAGE, precedingImage);
+    precedingImage = step.env.PRECEDING_RELEASE_IMAGE;
+  }
+});
 
 test("candidate smoke follows current schema across migrations while retaining pinned recovery baselines", () => {
   const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "")
     .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
-  for (const currentSchema of [55, 56]) for (const previousSchema of [51, 53, 55]) {
+  for (const currentSchema of [55, 56, 58, 59, 60, 61, 62]) for (const previousSchema of [51, 53, 55, 57, 58, 59, 60, 61, 62].filter(value => value <= currentSchema)) for (const platform of ["linux/amd64", "linux/arm64"]) {
     const exercises = [];
+    const selectedImages = new Map();
     let nonce = 0;
     runInNewContext(source, {
-      assert, URL, assertPatchedImageRuntime,
+      assert, URL, assertPatchedImageRuntime, exerciseApi,
       process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
         "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
-        "--previous-schema", String(previousSchema), "--platform", "linux/amd64", "--revision", "c".repeat(40)]},
+        "--previous-schema", String(previousSchema), "--platform", platform, "--revision", "c".repeat(40)]},
       console: {log() {}, error() {}},
       randomUUID: () => `synthetic-${++nonce}`,
       readFileSync: (url, encoding) => {
@@ -522,13 +563,34 @@ test("candidate smoke follows current schema across migrations while retaining p
       // No Docker process, API call, database, or volume is created in this fixture.
       spawnSync: (command, args, options) => {
         assert.equal(command, "docker");
+        if (args[0] === "run" && args.includes("-e") && args.at(-1).includes("monitor_status")) {
+          let handler;
+          runInNewContext(args.at(-1).replace("import http from 'node:http';", ""), {
+            http: {createServer(callback) { handler = callback; return {listen(port, host) {assert.equal(port, 8787); assert.equal(host, "0.0.0.0");}};}},
+          });
+          let status, body;
+          handler({url: "/metrics"}, {writeHead(code) {status = code;}, end(value) {body = value;}});
+          assert.equal(status, 200);
+          assert.equal(body, 'monitor_status{monitor_id="1",monitor_name="Release service"} 1\n');
+        }
+        if (args[0] === "create") {
+          assert.equal(args[args.indexOf("--platform") + 1], platform);
+          assert.equal(args[args.indexOf("--network") + 1], "none");
+          selectedImages.set(args[2], `sha256:${(args.at(-2).startsWith("ghcr.io/") ? "e" : "d").repeat(64)}`);
+        }
+        if (args[0] === "image" && args[1] === "inspect") {
+          assert.equal(args[args.indexOf("--platform")+1],platform,"inspect the selected architecture even when both variants are cached");
+          assert([...selectedImages.values()].includes(args.at(-1)), "inspect the selected container's image, not a multi-platform reference");
+        }
         if (options.input?.startsWith("await (async function exerciseApi(")) {
           const body = options.input;
           const input = JSON.parse(body.slice(body.lastIndexOf("})(") + 3, -2));
           exercises.push({schema: input.expectedSchema, features: input.features, create: input.create});
         }
-        const stdout = args.includes("process.versions.node") ? "22.23.4\n" : args[0] === "info" ? "linux\n" : args[0] === "image" && args[1] === "inspect"
-          ? JSON.stringify([{Os: "linux", Architecture: args.includes("--platform") ? args[args.indexOf("--platform")+1].split("/")[1] : "arm64", Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
+        const stdout = args.includes("process.versions.node") ? "22.23.4\n" : args[0] === "info" ? "linux\n"
+          : args[0] === "inspect" ? `${selectedImages.get(args.at(-1))}\n`
+          : args[0] === "image" && args[1] === "inspect"
+            ? JSON.stringify([{Id: `sha256:${"f".repeat(64)}`, Os: "linux", Architecture: platform.split("/")[1], Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
         return {status: 0, stdout, stderr: ""};
       },
     });
@@ -540,5 +602,21 @@ test("candidate smoke follows current schema across migrations while retaining p
       {schema: currentSchema, features: true, create: false},
       {schema: previousSchema, features: false, create: false},
     ]);
+  }
+});
+
+test("candidate smoke rejects unsupported and newer predecessor schemas before Docker runs", () => {
+  const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "")
+    .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
+  for (const previousSchema of [56, 59, 63]) {
+    assert.throws(() => runInNewContext(source, {
+      assert, URL,
+      process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
+        "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
+        "--previous-schema", String(previousSchema), "--platform", "linux/amd64", "--revision", "c".repeat(40)]},
+      readFileSync: () => "export const CURRENT_SCHEMA_VERSION = 58;\n",
+      spawnSync: () => assert.fail("Invalid schemas must not start Docker."),
+    }), /Previous schema/);
   }
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { KeyRound } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
@@ -21,15 +21,20 @@ export default function McpPage() {
   const [capability, setCapability] = useState<"read" | "write">("read");
   const [labIds, setLabIds] = useState<string[]>([]);
   const [expiresInDays, setExpiresInDays] = useState(30);
-  const [issuedToken, setIssuedToken] = useState<string | null>(null);
+  const [issuedToken, setIssuedToken] = useState<{ id: string; token: string } | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const refresh = useCallback(async () => {
-    const [nextTokens, nextProposals] = await Promise.all([api.listMcpTokens(), api.listMcpProposals()]);
-    setTokens(nextTokens);
-    setProposals(nextProposals);
+  const tokenGeneration = useRef(0);
+  const refreshTokens = useCallback(async () => {
+    const generation = ++tokenGeneration.current;
+    const next = await api.listMcpTokens();
+    if (generation === tokenGeneration.current) setTokens(next);
   }, []);
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshTokens(), api.listMcpProposals().then(setProposals)]);
+  }, [refreshTokens]);
 
   useEffect(() => {
     void refresh().catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
@@ -50,10 +55,13 @@ export default function McpPage() {
     setBusy(true);
     setError("");
     try {
-      const token = await api.createMcpToken({ name, capability, labIds, expiresInDays });
-      setIssuedToken(token.token);
+      const { token: credential, ...record } = await api.createMcpToken({ name, capability, labIds, expiresInDays });
+      tokenGeneration.current++;
+      setIssuedToken({ id: record.id, token: credential });
+      setShowHistory(false);
+      setTokens(current => [{ ...record, revokedAt: null }, ...current.filter(item => item.id !== record.id)]);
       setName("");
-      await refresh();
+      await refreshTokens();
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   }
@@ -61,7 +69,13 @@ export default function McpPage() {
   async function revokeToken(id: string) {
     setBusy(true);
     setError("");
-    try { await api.revokeMcpToken(id); await refresh(); }
+    try {
+      await api.revokeMcpToken(id);
+      tokenGeneration.current++;
+      setTokens(current => current.map(token => token.id === id ? { ...token, revokedAt: new Date().toISOString() } : token));
+      setIssuedToken(current => current?.id === id ? null : current);
+      await refreshTokens();
+    }
     catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   }
@@ -79,6 +93,9 @@ export default function McpPage() {
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   }
+
+  const inactive = (token: McpTokenRecord) => Boolean(token.revokedAt) || Date.parse(token.expiresAt) <= Date.now();
+  const visibleTokens = tokens.filter(token => showHistory ? inactive(token) : !inactive(token));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -132,6 +149,7 @@ export default function McpPage() {
             <Button className="self-end" disabled={busy || !name.trim() || !labIds.length}
               onClick={() => void createToken()}>{t("Create")}</Button>
           </div>
+          <p className="text-xs text-[var(--text-secondary)]">{t("Enter a name and select at least one lab.")}</p>
           <fieldset className="flex flex-wrap gap-3">
             <legend className="mb-2 text-xs">{t("Labs")}</legend>
             {allowedLabs.map((lab) => <label key={lab.id} className="flex items-center gap-1.5 text-xs">
@@ -141,13 +159,15 @@ export default function McpPage() {
           </fieldset>
           {issuedToken && <div className="rounded border border-[var(--accent-primary-border)] p-3" data-testid="mcp-issued-token">
             <p className="mb-2 text-xs">{t("MCP")} · {t("Copy")}</p>
-            <code className="block break-all text-xs">{issuedToken}</code>
-            <div className="mt-2 flex gap-2"><Button size="sm" onClick={() => void navigator.clipboard.writeText(issuedToken)}>{t("Copy")}</Button>
+            <code className="block break-all text-xs">{issuedToken.token}</code>
+            <div className="mt-2 flex gap-2"><Button size="sm" onClick={() => void navigator.clipboard.writeText(issuedToken.token)}>{t("Copy")}</Button>
               <Button size="sm" variant="outline" onClick={() => setIssuedToken(null)}>{t("Close")}</Button></div>
           </div>}
-          <div className="space-y-2">{tokens.map((token) => <div key={token.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-2 text-sm">
-            <span>{token.name} · {token.capability === "read" ? t("Viewer") : t("Editor")} · {token.expiresAt}</span>
-            {!token.revokedAt && <Button size="sm" variant="outline" disabled={busy} onClick={() => void revokeToken(token.id)}>{t("Delete")}</Button>}
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showHistory}
+            onChange={event => setShowHistory(event.target.checked)} />{t("History")}</label>
+          <div className="space-y-2">{visibleTokens.map((token) => <div data-testid="mcp-token-row" key={token.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-2 text-sm">
+            <span>{token.name} · {token.capability === "read" ? t("Viewer") : t("Editor")} · {token.expiresAt}{inactive(token) && <> · {token.revokedAt ? t("Revoked") : t("Expired")}</>}</span>
+            {!inactive(token) && <Button size="sm" variant="outline" disabled={busy} onClick={() => void revokeToken(token.id)}>{t("Revoke")}</Button>}
           </div>)}</div>
         </section>
         <section className="rk-panel space-y-2 rounded-[var(--radius-md)] p-4">

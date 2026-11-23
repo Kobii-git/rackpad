@@ -47,13 +47,24 @@ data boundaries as application code even when they are not shipped at runtime.
 
 ## Lifecycle and data flow
 
+`server/lib/physical-face-appearance.ts` and `physical-face-projection.ts` are pure
+geometry/palette contracts also bundled by the browser. Keep them free of
+Node/server imports. Face transforms,
+inverse editing coordinates, cable anchors, stack flattening and image exports
+must use the same quarter-turn rules.
+Generated stack artwork carries original primitive geometry and a validated
+numeric affine matrix so composition preserves decorative details. Canonical
+template/member/custom-snapshot validation rejects this reserved projection;
+initialization strips it before persistence and effective stack reads regenerate it.
+
 1. `server/db.ts` opens SQLite, enables WAL/FKs, and applies pending migrations.
 2. `server/index.ts` creates Fastify and starts background loops.
 3. Browser requests pass host/origin and typed route authorization; public and
    admin access is central while lab access is resolved by handlers before SQL.
 4. Domain mutations use parameterized SQL and transactions where multi-row
-   atomicity matters; audit coverage is mixed server/client and is activity
-   history rather than a tamper-evident ledger.
+   atomicity matters. Inventory deletion events are server-written in the same
+   transaction, with durable lab ownership. Other audit coverage is mixed
+   server/client; this is activity history rather than a tamper-evident ledger.
 5. Outbound monitor, alert, Docker, and controller HTTP flows pass through the
    DNS-pinned network guard.
 6. `/data/rackpad.db` is the normal persistent state; images are stored in SQLite.
@@ -71,3 +82,24 @@ data boundaries as application code even when they are not shipped at runtime.
   trust to root, host networking, and network capabilities.
 - SQLite contains topology, accounts, sessions, hashes, encrypted integration
   secrets, audit rows, and embedded images; treat it and all exports as sensitive.
+
+Health-capable providers use guarded read-only collectors with per-connection
+configuration/epoch checks and a shared bounded latest-reading cache. Inventory
+uses explicit preview/adoption or record bindings; collection does not imply
+adoption or health participation. External monitors read this cache through the
+existing monitoring/notification engine. Polling is independently opt-in and
+health providers cannot use automatic inventory-adoption schedules. Uptime Kuma
+uses authenticated `/metrics` with stable monitor IDs, never its control API.
+
+Glances models one `host:self` record per connection so host rename preserves an
+explicit binding. PatchMon identities use stable host IDs. Adapter warnings are
+bounded in the existing connection summary; provider timestamps remain observation
+times, so successful collection does not freshen old PatchMon agent reports.
+Numeric Glances readings carry unknown health rather than invented thresholds.
+
+Home Assistant reads REST states, then performs authentication and exactly two
+WebSocket registry-list requests. Registry IDs stabilize grouping and entity keys;
+restricted registry access falls back to explicitly identified entity records
+with a grouping warning. It never subscribes, invokes services, changes state or
+connects to MQTT/radio protocols. Latest readings and provider inventory are
+bounded to 10,000 entries; preview adoption retains its existing 500-device cap.

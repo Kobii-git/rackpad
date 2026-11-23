@@ -1,4 +1,4 @@
-import { physicalFaceRect } from "../../lib/physical-face";
+import { physicalFaceRect, faceUnitPoint } from "../../lib/physical-face";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -814,6 +814,7 @@ function buildRackCablingRoomScene(input: {
                 candidate.face === faceFrame.face,
             );
             if (!slot) continue;
+            const point = faceUnitPoint(definition, slot.x + slot.width / 2, slot.y + slot.height / 2);
             anchors.push({
               portId: binding.portId,
               deviceId: device.id,
@@ -823,10 +824,10 @@ function buildRackCablingRoomScene(input: {
               physicalFace: faceFrame.face,
               x:
                 rect.x +
-                ((slot.x + slot.width / 2) / 1000) * rect.width,
+                point.x * rect.width,
               y:
                 rect.y +
-                ((slot.y + slot.height / 2) / (definition.height || 1)) *
+                point.y *
                   rect.height,
               kind: "physical",
             });

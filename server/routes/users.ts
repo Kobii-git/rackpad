@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { hashPassword, parsePublicUser, requireAdmin, USER_ROLES } from '../lib/auth.js'
@@ -270,7 +271,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
     return parseAdminUser(row, listLabAccessForUsers([req.params.id]))
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "User", entityId: req.params.id, action: "user.delete" }, () => {
     if (!requireAdmin(req, reply)) return
 
     const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id)
@@ -291,6 +292,6 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
       req.params.id,
       `Deleted ${target?.username ?? req.params.id}.`,
     )
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

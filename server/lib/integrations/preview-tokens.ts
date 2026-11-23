@@ -49,6 +49,7 @@ export function integrationPreviewConnectionRevision(
     "labId",
     "provider",
     "baseUrl",
+    "options",
     "authKind",
     "authId",
     "authSecretEnc",
@@ -110,6 +111,8 @@ export function consumeIntegrationPreviewToken<T>(
   return entry.payload as T;
 }
 
-export function resetIntegrationPreviewTokensForTests() {
+export function invalidateIntegrationPreviewTokens() {
   tokens.clear();
 }
+
+export const resetIntegrationPreviewTokensForTests = invalidateIntegrationPreviewTokens;

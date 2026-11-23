@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import { assertPortStackMember } from '../lib/device-stacks.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
@@ -193,7 +194,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     return listPortTemplates().find((template) => template.id === req.params.id) ?? null
   })
 
-  app.delete<{ Params: { id: string } }>('/templates/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/templates/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "PortTemplate", entityId: req.params.id, action: "port.template.delete" }, () => {
     if (!assertGlobalAdmin(req, reply)) return
     if (BUILT_IN_PORT_TEMPLATES.some((template) => template.id === req.params.id)) {
       return reply.status(403).send({ error: 'Built-in templates cannot be deleted.' })
@@ -205,8 +206,8 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     db.prepare('DELETE FROM portTemplates WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.get<{ Querystring: { deviceId?: string; labId?: string } }>('/', async (req, reply) => {
     if (!req.authUser) {
@@ -388,7 +389,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     return parsePortRow(updated)
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "Port", entityId: req.params.id, action: "port.delete" }, () => {
     const port = getPortLabRow(req.params.id)
     if (!assertLabWriteFromRow(req, reply, port)) return
 
@@ -414,6 +415,6 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     })
 
     removePort()
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

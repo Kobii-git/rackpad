@@ -48,6 +48,10 @@ test("round templates validate, duplicate, apply linked ports and survive backup
     "Round AP",
   );
   const headers = authHeaders(token);
+  template.front.skin = "silver";
+  template.front.rotation = 90;
+  template.rear.skin = "graphite";
+  template.rear.rotation = 270;
   const customType = await app.inject({method: "POST", url: "/api/device-types", headers,
     payload: {label: "Round ceiling sensor", parentType: "ap"}});
   assert.equal(customType.statusCode, 201, customType.body);
@@ -57,6 +61,9 @@ test("round templates validate, duplicate, apply linked ports and survive backup
     { ...template.front, shape: "square" },
     { ...template.front, shape: "<svg>" },
     { ...template.front, height: 300 },
+    { ...template.front, skin: "url(https://invalid.example/paint)" },
+    { ...template.front, rotation: 45 },
+    { ...template.front, rotation: "90" },
   ]) {
     const invalid = await app.inject({
       method: "POST",
@@ -82,6 +89,8 @@ test("round templates validate, duplicate, apply linked ports and survive backup
   });
   assert.equal(duplicate.statusCode, 201, duplicate.body);
   assert.equal(json(duplicate).rear.shape, "round");
+  assert.equal(json(duplicate).front.skin, "silver");
+  assert.equal(json(duplicate).rear.rotation, 270);
   const device = await createDevice(token, "ceiling-ap", typeId);
   const peer = await createDevice(token, "round-peer", "switch");
   const port = await createPort(token, device.id, "LAN", "rear");
@@ -115,6 +124,8 @@ test("round templates validate, duplicate, apply linked ports and survive backup
   });
   assert.equal(loaded.statusCode, 200, loaded.body);
   assert.equal(json(loaded).snapshot.faces.front.shape, "round");
+  assert.equal(json(loaded).snapshot.faces.front.skin, "silver");
+  assert.equal(json(loaded).snapshot.faces.front.rotation, 90);
   assert.deepEqual(json(loaded).bindings, [
     { portId: port.id, slotId: template.portSlots[0]!.id },
   ]);
@@ -137,6 +148,8 @@ test("round templates validate, duplicate, apply linked ports and survive backup
     )
     .get(device.id) as { snapshot: string };
   assert.equal(JSON.parse(stored.snapshot).faces.rear.shape, "round");
+  assert.equal(JSON.parse(stored.snapshot).faces.rear.skin, "graphite");
+  assert.equal(JSON.parse(stored.snapshot).faces.rear.rotation, 270);
   const definition = db
     .prepare("SELECT definition FROM hardwareTemplates WHERE id = ?")
     .get(template.id) as { definition: string };
@@ -1296,7 +1309,7 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1420,7 +1433,7 @@ test("schema 46 migration adds nullable shared room-canvas coordinates without c
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1509,7 +1522,7 @@ test("schema 48 migration adds cable inspection defaults without changing invent
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1543,7 +1556,7 @@ test("schema 48 migration adds cable inspection defaults without changing invent
   const migrated = new Database(legacyPath, { readonly: true });
   assert.deepEqual(
     migrated.prepare("SELECT * FROM devices ORDER BY id").all(),
-    beforeDevices.map((row) => ({ ...(row as Record<string, unknown>), labelPosition: "upper-right" })),
+    beforeDevices.map((row) => ({ ...(row as Record<string, unknown>), labelPosition: "upper-right", publicReference: null })),
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
@@ -1594,7 +1607,7 @@ test("schema 49 migration indexes persisted rack mount kinds without changing de
     UPDATE schemaVersion
     SET version = 48, updatedAt = '2026-09-03T00:00:00.000Z'
     WHERE id = 1;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1623,7 +1636,7 @@ test("schema 49 migration indexes persisted rack mount kinds without changing de
     migrated
       .prepare("SELECT * FROM devices WHERE id = 'device_rack_top_v48'")
       .get(),
-    { ...(before as Record<string, unknown>), labelPosition: "upper-right" },
+    { ...(before as Record<string, unknown>), labelPosition: "upper-right", publicReference: null },
   );
   assert.ok(
     (migrated.pragma("index_list(devices)") as Array<{ name: string }>).some(

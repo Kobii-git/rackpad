@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import {
@@ -334,12 +335,12 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     return parseWifiController(row)
   })
 
-  app.delete<{ Params: { id: string } }>('/controllers/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/controllers/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "WifiController", entityId: req.params.id, action: "wifi.controller.delete" }, () => {
     const existing = getController(req.params.id)
     if (!assertLabWriteFromRow(req, reply, existing)) return
     db.prepare('DELETE FROM wifiControllers WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.get<{ Querystring: { labId?: string } }>('/ssids', async (req, reply) => {
     if (!req.authUser) {
@@ -449,12 +450,12 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     return parseWifiSsid(row)
   })
 
-  app.delete<{ Params: { id: string } }>('/ssids/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/ssids/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "WifiSsid", entityId: req.params.id, action: "wifi.ssid.delete" }, () => {
     const existing = getSsid(req.params.id)
     if (!assertLabWriteFromRow(req, reply, existing)) return
     db.prepare('DELETE FROM wifiSsids WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.get<{ Querystring: { labId?: string } }>('/access-points', async (req, reply) => {
     if (!req.authUser) {
@@ -635,7 +636,7 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     return parseWifiRadio(row, radioSsidIds)
   })
 
-  app.delete<{ Params: { id: string } }>('/radios/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/radios/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "WifiRadio", entityId: req.params.id, action: "wifi.radio.delete" }, () => {
     const existing = getRadio(req.params.id)
     if (!existing) {
       return reply.status(404).send({ error: 'WiFi radio not found.' })
@@ -643,8 +644,8 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     const apDevice = requireApDevice(String(existing.apDeviceId))
     if (!assertLabWrite(req, reply, apDevice.labId)) return
     db.prepare('DELETE FROM wifiRadios WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.get<{ Querystring: { labId?: string; apDeviceId?: string } }>('/associations', async (req, reply) => {
     if (!req.authUser) {
@@ -757,7 +758,7 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(parseWifiClientAssociation(row))
   })
 
-  app.delete<{ Params: { clientDeviceId: string } }>('/associations/:clientDeviceId', async (req, reply) => {
+  app.delete<{ Params: { clientDeviceId: string } }>('/associations/:clientDeviceId', (req, reply) => withAuditedDeletion(req, reply, { entityType: "WifiClientAssociation", entityId: req.params.clientDeviceId, action: "wifi.client.unlink" }, () => {
     const existing = db.prepare(`
       SELECT wifiClientAssociations.*, devices.labId
       FROM wifiClientAssociations
@@ -776,6 +777,6 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
       `).run(req.params.clientDeviceId, association.apDeviceId)
     })()
 
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

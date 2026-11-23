@@ -1062,3 +1062,10 @@
     font-size: 9pt;
   }
 }
+
+@media print {
+  body:has(> .reference-label-sheet) { display: block; height: auto; min-height: 0; overflow: visible; background: white; color: black; }
+  body:has(> .reference-label-sheet) > :not(.reference-label-sheet) { display: none !important; }
+  .reference-label-sheet { display: flex !important; flex-wrap: wrap; align-content: flex-start; gap: 6mm; background: white; color: black; }
+  .reference-label { display: flex; flex-direction: column; gap: 2mm; padding: 4mm; border: 1px solid black; break-inside: avoid; max-width: 90mm; overflow-wrap: anywhere; }
+}

@@ -56,6 +56,7 @@ const {
   parseArpScanOutput,
   parseNmapPingScanOutput,
   resetDiscoveryScanJobsForTests,
+  runDueDiscoveryScanSchedules,
   setDiscoveryScanRunnerForTests,
 } = await import("../routes/discovery.js");
 
@@ -8381,6 +8382,46 @@ test("discovery scan schedules can be managed per lab", async () => {
   assert.deepEqual(readJson(listAfterDeleteRes), []);
 });
 
+test("automatic discovery ticks run due schedules once and skip disabled or recent schedules", async () => {
+  const token = await bootstrapAdmin();
+  const due = await createDiscoveryScanScheduleForTest(token);
+  const recent = await createDiscoveryScanScheduleForTest(token, {
+    cidr: "10.43.0.0/30",
+  });
+  const disabled = await createDiscoveryScanScheduleForTest(token, {
+    cidr: "10.44.0.0/30",
+    enabled: false,
+  });
+  db.prepare("UPDATE discoveryScanSchedules SET lastRunAt=? WHERE id=?").run(
+    new Date().toISOString(),
+    recent.id,
+  );
+  const calls: string[] = [];
+  setDiscoveryScanRunnerForTests(async (_labId, cidr) => {
+    calls.push(cidr);
+    return makeDiscoveryScanResult();
+  });
+  await runDueDiscoveryScanSchedules();
+  await runDueDiscoveryScanSchedules();
+  assert.deepEqual(calls, [due.cidr]);
+  assert.equal(
+    (
+      db
+        .prepare("SELECT lastResult FROM discoveryScanSchedules WHERE id=?")
+        .get(due.id) as { lastResult: string }
+    ).lastResult,
+    "success",
+  );
+  assert.equal(
+    (
+      db
+        .prepare("SELECT lastRunAt FROM discoveryScanSchedules WHERE id=?")
+        .get(disabled.id) as { lastRunAt: string | null }
+    ).lastRunAt,
+    null,
+  );
+});
+
 test("running a discovery scan schedule starts a job and records success", async () => {
   const adminToken = await bootstrapAdmin();
   const scanResult = makeDiscoveryScanResult({
@@ -10122,7 +10163,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     DROP INDEX idx_docker_import_sources_enabled;
     DROP INDEX idx_docker_import_sources_lab_id;
 
-    DROP TABLE integrationSyncSchedules;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; DROP TABLE integrationSyncSchedules;
     DROP TABLE integrationConnections;
     DROP TABLE snmpSyncSchedules;
 
@@ -10170,7 +10211,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -10263,7 +10304,7 @@ test("storage topology migration upgrades a version-34 database without changing
     DROP TABLE driveSlots;
     DROP TABLE storageDrives;
     DROP TABLE driveBayTemplates;
-    DROP TABLE integrationSyncSchedules;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; DROP TABLE integrationSyncSchedules;
     DROP TABLE integrationConnections;
     DROP TABLE snmpSyncSchedules;
     ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
@@ -10286,7 +10327,7 @@ test("storage topology migration upgrades a version-34 database without changing
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -10395,7 +10436,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
   initializeDatabase();
   const legacy = new Database(legacyPath);
   legacy.exec(`
-    DROP TABLE integrationSyncSchedules;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; DROP TABLE integrationSyncSchedules;
     DROP TABLE integrationConnections;
     DROP TABLE snmpSyncSchedules;
     ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
@@ -10417,7 +10458,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -10503,7 +10544,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError; DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -11486,7 +11527,10 @@ async function waitForDiscoveryScanJobStatus(
   );
 }
 
-async function createDiscoveryScanScheduleForTest(adminToken: string) {
+async function createDiscoveryScanScheduleForTest(
+  adminToken: string,
+  overrides: { cidr?: string; enabled?: boolean } = {},
+) {
   const createRes = await app.inject({
     method: "POST",
     url: "/api/discovery/schedules",
@@ -11499,6 +11543,7 @@ async function createDiscoveryScanScheduleForTest(adminToken: string) {
       cidr: "10.42.0.0/30",
       intervalMs: 120_000,
       enabled: true,
+      ...overrides,
     },
   });
   assert.equal(createRes.statusCode, 201);

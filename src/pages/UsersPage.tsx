@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { smtpErrorMessages } from "@/lib/smtp-errors";
 import {
   createUserAccount,
   deleteUserAccount,
@@ -117,6 +118,8 @@ function labAccessPayload(
 }
 
 const DEFAULT_ALERT_SETTINGS: AlertSettings = {
+  ntfyTopicUrl: null,
+  ntfyTokenConfigured: false,
   enabled: false,
   notifyOnDown: true,
   notifyOnRecovery: true,
@@ -159,6 +162,8 @@ export default function UsersPage() {
   const [alertTesting, setAlertTesting] = useState(false);
   const [alertError, setAlertError] = useState("");
   const [alertSuccess, setAlertSuccess] = useState("");
+  const [alertWarning, setAlertWarning] = useState("");
+  const [ntfyToken, setNtfyToken] = useState<string | null | undefined>(undefined);
   const [alertHistory, setAlertHistory] = useState<AuditEntry[]>([]);
   const [alertHistoryLoading, setAlertHistoryLoading] = useState(true);
   const [alertHistoryError, setAlertHistoryError] = useState("");
@@ -531,9 +536,11 @@ export default function UsersPage() {
     setAlertSaving(true);
     setAlertError("");
     setAlertSuccess("");
+    setAlertWarning("");
     try {
-      const saved = await api.updateAlertSettings(alertSettings);
+      const saved = await api.updateAlertSettings({ ...alertSettings, ...(ntfyToken === undefined ? {} : { ntfyToken }) });
       setAlertSettings(saved);
+      setNtfyToken(undefined);
       setAlertSuccess("Notification settings saved.");
     } catch (err) {
       setAlertError(
@@ -550,19 +557,24 @@ export default function UsersPage() {
     setAlertTesting(true);
     setAlertError("");
     setAlertSuccess("");
+    setAlertWarning("");
     try {
       const result = await api.sendAlertSettingsTest();
-      setAlertSuccess(
-        `Test alert delivered via ${result.channels.map((channel) => channel.channel).join(", ")}.`,
-      );
-      const entries = await api.getAuditLog({ entityType: "Alert", limit: 40 });
-      setAlertHistory(entries);
+      setAlertSuccess(t("Delivered via {channels}.", { channels: result.channels.filter(channel => channel.delivered).map(channel => channel.channel).join(", ") }));
+      const failed = result.channels.filter(channel => !channel.delivered);
+      if (failed.length) setAlertWarning(t("Failed channels: {channels}.", { channels: failed.map(channel => channel.channel).join(", ") }));
     } catch (err) {
-      setAlertError(
-        err instanceof Error ? err.message : "Failed to send test alert.",
-      );
+      const smtpMessage = err instanceof ApiError && err.code && Object.hasOwn(smtpErrorMessages, err.code)
+        ? smtpErrorMessages[err.code as keyof typeof smtpErrorMessages] : null;
+      setAlertError(smtpMessage ? t(smtpMessage) : err instanceof Error ? err.message : "Failed to send test alert.");
     } finally {
       setAlertTesting(false);
+      try {
+        setAlertHistory(await api.getAuditLog({ entityType: "Alert", limit: 40 }));
+        setAlertHistoryError("");
+      } catch {
+        setAlertHistoryError("Failed to load alert history.");
+      }
     }
   }
 
@@ -1431,7 +1443,7 @@ export default function UsersPage() {
                 </CardTitle>
                 <Badge tone="info">
                   <BellRing className="size-3" />
-                  {t("Discord / Telegram / Email")}
+                  {t("Alerting")}
                 </Badge>
               </CardHeader>
               <CardBody className="space-y-4">
@@ -1522,6 +1534,24 @@ export default function UsersPage() {
                   </Field>
                 </div>
 
+                <div data-testid="ntfy-settings" className="grid gap-4 md:grid-cols-2">
+                  <Field label={t("ntfy topic URL")}>
+                    <Input type="url" value={alertSettings.ntfyTopicUrl ?? ""}
+                      onChange={event => setAlertSettings(previous => ({ ...previous, ntfyTopicUrl: event.target.value || null }))}
+                      disabled={alertsLoading || alertSaving || alertTesting}  />
+                  </Field>
+                  <div>
+                  <Field label={t("ntfy access token")}>
+                    <Input type="password" autoComplete="new-password" value={ntfyToken ?? ""}
+                      onChange={event => setNtfyToken(event.target.value || undefined)} disabled={alertsLoading || alertSaving || alertTesting} />
+                  </Field>
+                    {alertSettings.ntfyTokenConfigured && ntfyToken !== null && <div className="mt-2 flex items-center gap-2 text-xs">
+                      <span>{t("Configured")}</span>
+                      <Button size="sm" variant="outline" disabled={alertSaving} onClick={() => setNtfyToken(null)}>{t("Delete")}</Button>
+                    </div>}
+                  </div>
+                </div>
+
                 <Field label={t("Discord webhook URL")}>
                   <Input
                     value={alertSettings.discordWebhookUrl ?? ""}
@@ -1587,10 +1617,11 @@ export default function UsersPage() {
                         }
                         disabled={alertsLoading}
                       />
-                      {t("SSL/TLS")}
+                      {t("Implicit TLS")}
                     </label>
                   </div>
 
+                  <p className="mb-3 text-xs text-[var(--color-fg-subtle)]">{t("Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.")}</p>
                   <div className="grid gap-4 md:grid-cols-2">
                     <Field label={t("SMTP host")}>
                       <Input
@@ -1692,6 +1723,7 @@ export default function UsersPage() {
                   </div>
                 )}
 
+                {alertWarning && <div role="status" className="rounded border border-[var(--warning-border)] px-3 py-2 text-sm">{alertWarning}</div>}
                 {alertSuccess && (
                   <div className="rounded-[var(--radius-sm)] border border-[var(--color-ok)]/30 bg-[var(--color-ok)]/10 px-3 py-2 text-sm text-[var(--color-ok)]">
                     {alertSuccess}
@@ -1710,7 +1742,7 @@ export default function UsersPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => void handleTestAlert()}
-                      disabled={alertsLoading || alertTesting}
+                      disabled={alertsLoading || alertTesting || alertSaving}
                     >
                       <BellRing className="size-3.5" />
                       {alertTesting ? t("Sending...") : t("Send test")}
@@ -1719,7 +1751,7 @@ export default function UsersPage() {
                       className="shrink-0"
                       size="sm"
                       onClick={() => void handleSaveAlerts()}
-                      disabled={alertsLoading || alertSaving}
+                      disabled={alertsLoading || alertSaving || alertTesting}
                     >
                       <Save className="size-3.5" />
                       {alertSaving ? t("Saving...") : t("Save notifications")}

@@ -38,8 +38,11 @@ const baseNavItems = [
   { to: "/wifi", icon: Wifi, label: "WiFi" },
   { to: "/discovery", icon: Search, label: "Discovery" },
   { to: "/imports", icon: UploadCloud, label: "Imports" },
+  { to: "/external-health", icon: Activity, label: "External health" },
   { to: "/monitoring", icon: Activity, label: "Monitoring" },
   { to: "/ports", icon: Cable, label: "Ports" },
+  { to: "/floorplans", icon: Building2, label: "Floorplan" },
+  { to: "/labels", icon: Tags, label: "Labels" },
   { to: "/cables", icon: Workflow, label: "Cables" },
   { to: "/networks", icon: Network, label: "Networks" },
   { to: "/reports", icon: FileText, label: "Reports" },
@@ -100,14 +103,14 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           rel="noopener noreferrer"
           aria-label={t("{value1}: {name}", {
             value1: t("Rackpad"),
-            name: APP_VERSION_TAG,
+            name: [APP_VERSION_TAG, APP_CHANNEL_LABEL].filter(Boolean).join(" "),
           })}
           className="ml-auto hidden shrink-0 flex-col items-end gap-1 xl:flex"
           data-testid="sidebar-version"
         >
           <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             {APP_VERSION_TAG}
-          </span>
+          </span>{" "}
           {APP_CHANNEL_LABEL && (
             <span
               className={cn(

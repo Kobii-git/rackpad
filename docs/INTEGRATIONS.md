@@ -23,6 +23,18 @@ labeled and described separately. Pulling inventory opens a preview dialog
 with one tab per object type (VLANs, subnets, DHCP, devices) so large
 controllers stay reviewable.
 
+## External health and device bindings
+
+**External health** keeps the last provider reading visible when it expires or
+a collection fails. Use **Refresh** to get current readings before binding a
+provider record or creating an external monitor. Existing monitors report
+unknown while their readings are unavailable.
+
+After a connection points to a different source, a provider record ID may be
+reused. If Imports reports a conflict, open **External health** and review the
+prior binding. Unbind it to allow a new import, or refresh and explicitly bind
+the new record to an existing device. Unbinding preserves the local device.
+
 ## Requirements
 
 - `RACKPAD_SECRET_KEY` must be set on the server before connections can be
@@ -35,6 +47,10 @@ controllers stay reviewable.
   reserved destinations, the same policy as HTTP monitors.
 - Self-signed controllers work: untick **Verify TLS certificate** on the
   connection. Prefer installing a trusted certificate where you can.
+- When editing a connection with a stored credential, enter the credential
+  again to change its URL, turn off certificate verification, or enable
+  unencrypted NUT transport. **Test & discover** applies the same rule. Other
+  settings can be edited while retaining the stored credential.
 
 ## Per-provider setup
 
@@ -62,6 +78,18 @@ controllers stay reviewable.
   (from the guest agent or container interfaces). Templates are skipped,
   and OVS setups work: bridges are derived from their member ports when
   the node does not list the OVSBridge rows themselves.
+  Host API imports also stage the node's IPv4 management address and actual
+  network interfaces, including physical ports and virtual bridge/bond/VLAN
+  interfaces. The default-gateway interface is preferred, then active interfaces
+  and a stable name order. Missing MAC/speed/link metadata stays unknown; the
+  API does not guarantee the collector's complete live hardware data. Synthetic
+  OVS bridges remain virtual switches and do not invent host adapter ports.
+  Physical Ethernet ports start as RJ45; review their connector media in inventory
+  when the API does not identify it.
+  Matching existing devices remain unchanged under the merge-only contract,
+  including manual connector choices, port IDs and cables. Previously imported
+  hosts are not automatically enriched; review and add their missing fields
+  explicitly in inventory. API permission failures remain visible in the preview.
   The offline `collect-proxmox.sh` upload on the Imports tab remains for
   hosts Rackpad cannot reach.
 

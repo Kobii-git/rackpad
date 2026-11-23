@@ -117,8 +117,12 @@ by default.
 
 Image publication emits an immutable digest. The publication workflow verifies
 that exact image and revision on AMD64 and ARM64 with isolated fresh-install,
-schema-53 and previous stable schema-55 upgrade and paired rollback fixtures. GitHub Release creation depends
-on both smoke jobs as well as the preceding quality/security/build gates.
+restart and paired rollback checks. Both the candidate and published checks
+cover the latest stable and beta releases by immutable digest and explicit
+schema, including upgrades where the schema is unchanged. Historical
+schema-53 and schema-57 baselines also exercise older upgrade paths.
+GitHub Release creation depends on both smoke jobs as well as the preceding
+quality/security/build gates.
 
 Release preparation includes version and lockfile, changelog Added/Fixed/Changed
 sections as applicable, full validation, test notes, tag/channel review, and smoke
@@ -132,6 +136,6 @@ No automatic volume backup, downgrade migration, readiness split, or metrics/APM
 is provided.
 
 Pull requests also build unpublished candidate images on AMD64 and ARM64 and
-verify fresh installs, actual stable schema-51/schema-55 and beta schema-53 upgrades,
-restart persistence and paired rollback. Candidate images are addressed by local
-immutable image IDs; previous images remain pinned GHCR digests.
+verify fresh installs, upgrades, restart persistence and paired rollback.
+They also cover the historical stable schema-51 image. The candidate image
+uses a local immutable image ID and each baseline uses a pinned GHCR digest.
